@@ -1,0 +1,264 @@
+{
+ "app": "vendor_lifecycle",
+ "charts": [],
+ "content": "[{\"id\":\"vlHeader1\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Vendor Lifecycle</b></span>\",\"col\":12}},{\"id\":\"vlShortcut1\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Vendor Onboarding Request\",\"col\":4}},{\"id\":\"vlShortcut2\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Vendor Deboarding Request\",\"col\":4}},{\"id\":\"vlShortcut3\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Vendor Lifecycle Settings\",\"col\":4}},{\"id\":\"vlSpacer1\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"vlHeader2\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Onboarding &amp; Verification</b></span>\",\"col\":12}},{\"id\":\"vlCardOnboarding\",\"type\":\"card\",\"data\":{\"card_name\":\"Onboarding\",\"col\":4}},{\"id\":\"vlCardVerification\",\"type\":\"card\",\"data\":{\"card_name\":\"Verification\",\"col\":4}},{\"id\":\"vlCardActivation\",\"type\":\"card\",\"data\":{\"card_name\":\"Activation\",\"col\":4}},{\"id\":\"vlHeader3\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Deboarding &amp; Engagement</b></span>\",\"col\":12}},{\"id\":\"vlCardDeboarding\",\"type\":\"card\",\"data\":{\"card_name\":\"Deboarding\",\"col\":4}},{\"id\":\"vlCardEngagement\",\"type\":\"card\",\"data\":{\"card_name\":\"Ongoing Engagement\",\"col\":4}},{\"id\":\"vlCardSettings\",\"type\":\"card\",\"data\":{\"card_name\":\"Masters & Settings\",\"col\":4}}]",
+ "creation": "2026-08-03 14:40:06.931794",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "non-profit",
+ "idx": 0,
+ "is_hidden": 0,
+ "label": "Vendor Lifecycle",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Onboarding",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Vendor Onboarding Request",
+   "link_count": 0,
+   "link_to": "Vendor Onboarding Request",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "Vendor Onboarding Request",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Vendor KYC",
+   "link_count": 0,
+   "link_to": "Vendor KYC",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Verification",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "Vendor KYC",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Vendor Compliance Audit",
+   "link_count": 0,
+   "link_to": "Vendor Compliance Audit",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "Vendor KYC",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Vendor Sampling Evaluation",
+   "link_count": 0,
+   "link_to": "Vendor Sampling Evaluation",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "Vendor KYC",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Vendor Reference Check",
+   "link_count": 0,
+   "link_to": "Vendor Reference Check",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Activation",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "Vendor KYC",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Vendor Sign Off",
+   "link_count": 0,
+   "link_to": "Vendor Sign Off",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Deboarding",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Vendor Deboarding Request",
+   "link_count": 0,
+   "link_to": "Vendor Deboarding Request",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "Vendor Deboarding Request",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Vendor Deboarding Checklist",
+   "link_count": 0,
+   "link_to": "Vendor Deboarding Checklist",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Ongoing Engagement",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Vendor Satisfaction Survey",
+   "link_count": 0,
+   "link_to": "Vendor Satisfaction Survey",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Vendor Support Ticket",
+   "link_count": 0,
+   "link_to": "Vendor Support Ticket",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Masters & Settings",
+   "link_count": 0,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Vendor Lifecycle Settings",
+   "link_count": 0,
+   "link_to": "Vendor Lifecycle Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Rating Criteria",
+   "link_count": 0,
+   "link_to": "Rating Criteria",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Audit Checklist Template",
+   "link_count": 0,
+   "link_to": "Audit Checklist Template",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Vendor Deboarding Checklist Template",
+   "link_count": 0,
+   "link_to": "Vendor Deboarding Checklist Template",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Deboarding Reason",
+   "link_count": 0,
+   "link_to": "Deboarding Reason",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-08-03 14:40:06.931794",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "Vendor Lifecycle",
+ "number_cards": [],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "restrict_to_domain": "",
+ "roles": [],
+ "sequence_id": 1.0,
+ "shortcuts": [
+  {
+   "label": "Vendor Onboarding Request",
+   "link_to": "Vendor Onboarding Request",
+   "type": "DocType",
+   "doc_view": "List"
+  },
+  {
+   "label": "Vendor Deboarding Request",
+   "link_to": "Vendor Deboarding Request",
+   "type": "DocType",
+   "doc_view": "List"
+  },
+  {
+   "label": "Vendor Lifecycle Settings",
+   "link_to": "Vendor Lifecycle Settings",
+   "type": "DocType",
+   "doc_view": ""
+  }
+ ],
+ "title": "Vendor Lifecycle",
+ "type": "Workspace"
+}

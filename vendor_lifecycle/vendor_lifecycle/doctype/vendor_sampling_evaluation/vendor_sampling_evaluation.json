@@ -1,0 +1,163 @@
+{
+ "actions": [],
+ "autoname": "VSE-.YYYY.-.#####",
+ "creation": "2026-08-03 12:51:42.036303",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "field_order": [
+  "kyc",
+  "vendor",
+  "evaluation_date",
+  "column_break_top",
+  "open_to_new_development",
+  "documents_compiled",
+  "section_break_samples",
+  "samples",
+  "section_break_evaluation",
+  "evaluation_template",
+  "evaluation_results",
+  "section_break_remarks",
+  "remarks",
+  "vendor_comments"
+ ],
+ "fields": [
+  {
+   "fieldname": "kyc",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Vendor KYC",
+   "options": "Vendor KYC",
+   "read_only_depends_on": "eval:!doc.__islocal",
+   "reqd": 1
+  },
+  {
+   "fieldname": "vendor",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Vendor",
+   "options": "Supplier",
+   "read_only": 1
+  },
+  {
+   "default": "Today",
+   "fieldname": "evaluation_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Evaluation Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_top",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "open_to_new_development",
+   "fieldtype": "Check",
+   "label": "Open to Fresh Sampling for New Products"
+  },
+  {
+   "default": "0",
+   "fieldname": "documents_compiled",
+   "fieldtype": "Check",
+   "label": "Signed Documents Compiled"
+  },
+  {
+   "fieldname": "section_break_samples",
+   "fieldtype": "Section Break",
+   "label": "Samples"
+  },
+  {
+   "fieldname": "samples",
+   "fieldtype": "Table",
+   "label": "Products / Samples",
+   "options": "Vendor Sampling Evaluation Item"
+  },
+  {
+   "fieldname": "section_break_evaluation",
+   "fieldtype": "Section Break",
+   "label": "Evaluation Criteria"
+  },
+  {
+   "description": "Optional — pick a template to load your organization's own evaluation criteria (e.g. cost basis, quality checks, turnaround time). Leave blank to skip structured evaluation.",
+   "fieldname": "evaluation_template",
+   "fieldtype": "Link",
+   "label": "Evaluation Template",
+   "options": "Sampling Evaluation Template"
+  },
+  {
+   "fieldname": "evaluation_results",
+   "fieldtype": "Table",
+   "label": "Evaluation Results",
+   "options": "Vendor Sampling Evaluation Result"
+  },
+  {
+   "fieldname": "section_break_remarks",
+   "fieldtype": "Section Break",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Text Editor",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "vendor_comments",
+   "fieldtype": "Text Editor",
+   "label": "Vendor Comments"
+  }
+ ],
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-08-03 12:51:42.036303",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "Vendor Sampling Evaluation",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Vendor Lifecycle Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Vendor Lifecycle User",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

@@ -1,0 +1,51 @@
+{
+ "actions": [],
+ "creation": "2026-08-03 12:51:42.036303",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "item_code",
+  "estimated_capacity_per_day",
+  "finalized_cost",
+  "quality_pass_attempts"
+ ],
+ "fields": [
+  {
+   "fieldname": "item_code",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Item",
+   "options": "Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "estimated_capacity_per_day",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Estimated Capacity / Day"
+  },
+  {
+   "fieldname": "finalized_cost",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Finalized Cost"
+  },
+  {
+   "fieldname": "quality_pass_attempts",
+   "fieldtype": "Int",
+   "label": "Quality Pass — Attempts Taken"
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-03 12:51:42.036303",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "Vendor Sampling Evaluation Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

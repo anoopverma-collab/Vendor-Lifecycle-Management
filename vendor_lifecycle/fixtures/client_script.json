@@ -1,0 +1,46 @@
+[
+ {
+  "docstatus": 0,
+  "doctype": "Client Script",
+  "dt": "Vendor Onboarding Request",
+  "enabled": 1,
+  "modified": "2026-08-05 18:04:10.815728",
+  "module": "Vendor Lifecycle",
+  "name": "Vendor Onboarding Request Start KYC Button",
+  "script": "frappe.ui.form.on(\"Vendor Onboarding Request\", {\n\trefresh(frm) {\n\t\tfunction render_pipeline_progress(stages) {\n\t\t\tconst color_map = { \"Not Started\": \"gray\", \"In Progress\": \"orange\", \"Completed\": \"green\" };\n\t\t\tconst html = stages\n\t\t\t\t.map(\n\t\t\t\t\t(s) =>\n\t\t\t\t\t\t`<span class=\"indicator-pill ${color_map[s.state] || \"gray\"}\" style=\"margin-right: 8px;\">${frappe.utils.escape_html(s.label)}: ${frappe.utils.escape_html(s.state)}</span>`\n\t\t\t\t)\n\t\t\t\t.join(\"\");\n\t\t\tconst field = frm.get_field(\"pipeline_progress\");\n\t\t\tif (field) {\n\t\t\t\tfield.html(html);\n\t\t\t}\n\t\t}\n\n\t\tfunction add_accept_reject_buttons(has_kyc) {\n\t\t\t// Locked once a Vendor KYC exists for this request — see\n\t\t\t// _enforce_review_decision_open() in the controller.\n\t\t\tif (has_kyc) {\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tif (frm.doc.status !== \"Accepted\") {\n\t\t\t\tfrm.add_custom_button(__(\"Accept\"), () => {\n\t\t\t\t\tfrm.call(\"accept\").then(() => frm.reload_doc());\n\t\t\t\t});\n\t\t\t}\n\t\t\tif (frm.doc.status !== \"Rejected\") {\n\t\t\t\tfrm.add_custom_button(__(\"Reject\"), () => {\n\t\t\t\t\tfrm.call(\"reject\").then(() => frm.reload_doc());\n\t\t\t\t});\n\t\t\t}\n\t\t}\n\n\t\tif (frm.doc.__islocal) {\n\t\t\treturn;\n\t\t}\n\n\t\tif (frm.doc.status === \"Draft\") {\n\t\t\tadd_accept_reject_buttons(false);\n\t\t\treturn;\n\t\t}\n\n\t\tfrm.call(\"get_pipeline_progress\").then((r) => {\n\t\t\tconst stages = r.message || [];\n\t\t\trender_pipeline_progress(stages);\n\n\t\t\tconst kyc_stage = stages.find((s) => s.label === \"KYC\");\n\t\t\tconst has_kyc = !!kyc_stage && kyc_stage.state !== \"Not Started\";\n\n\t\t\tadd_accept_reject_buttons(has_kyc);\n\n\t\t\tif (frm.doc.status !== \"Accepted\") {\n\t\t\t\treturn;\n\t\t\t}\n\n\t\t\tconst handling = frappe.boot.vendor_lifecycle_settings?.duplicate_kyc_handling || \"Stop\";\n\t\t\tif (has_kyc && handling === \"Stop\") {\n\t\t\t\treturn;\n\t\t\t}\n\n\t\t\tfrm.add_custom_button(__(\"Start KYC\"), () => {\n\t\t\t\tfrm.call(\"start_kyc\").then((res) => {\n\t\t\t\t\tif (res.message) {\n\t\t\t\t\t\t// Opens a fresh, unsaved Vendor KYC form pre-filled with\n\t\t\t\t\t\t// this data — nothing is created until the reviewer saves\n\t\t\t\t\t\t// it themselves.\n\t\t\t\t\t\tfrappe.new_doc(\"Vendor KYC\", res.message);\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t});\n\t\t});\n\t},\n});\n",
+  "view": "Form"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Client Script",
+  "dt": "Vendor KYC",
+  "enabled": 1,
+  "modified": "2026-08-04 15:56:56.661773",
+  "module": "Vendor Lifecycle",
+  "name": "Vendor KYC Direct Create Notice",
+  "script": "frappe.ui.form.on(\"Vendor KYC\", {\n\trefresh(frm) {\n\t\tfrm.toggle_reqd(\"onboarding_request\", !!frappe.boot.vendor_lifecycle_settings?.require_onboarding_request_for_kyc);\n\t},\n});\n",
+  "view": "Form"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Client Script",
+  "dt": "Vendor Sampling Evaluation",
+  "enabled": 1,
+  "modified": "2026-08-05 12:02:45.470252",
+  "module": "Vendor Lifecycle",
+  "name": "Vendor Sampling Evaluation Load Template Button",
+  "script": "frappe.ui.form.on(\"Vendor Sampling Evaluation\", {\n\trefresh(frm) {\n\t\tif (frm.doc.evaluation_template) {\n\t\t\tfrm.add_custom_button(__(\"Load Evaluation from Template\"), () => {\n\t\t\t\tfrm.call(\"load_evaluation_from_template\").then(() => frm.refresh());\n\t\t\t});\n\t\t}\n\t},\n});\n",
+  "view": "Form"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Client Script",
+  "dt": "Vendor KYC",
+  "enabled": 1,
+  "modified": "2026-08-05 18:31:57.434382",
+  "module": "Vendor Lifecycle",
+  "name": "Vendor KYC GSTIN Address Buttons",
+  "script": "frappe.ui.form.on(\"Vendor KYC\", {\n\trefresh(frm) {\n\t\tif (frm.doc.country === \"India\" && frm.doc.gstin_uin) {\n\t\t\tfrm.add_custom_button(__(\"Fetch Address from GSTIN\"), () => {\n\t\t\t\tfrm.call(\"fetch_gstin_details\").then((r) => {\n\t\t\t\t\tfrm.refresh_field(\"gstin_address_line\");\n\t\t\t\t\tfrm.refresh_field(\"gstin_city\");\n\t\t\t\t\tfrm.refresh_field(\"gstin_state\");\n\t\t\t\t\tfrm.refresh_field(\"gstin_pincode\");\n\t\t\t\t\tif (r.message) {\n\t\t\t\t\t\tfrappe.show_alert(\n\t\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\tmessage: __(\"Fetched from GSTIN — review the Address Verification section below.\"),\n\t\t\t\t\t\t\t\tindicator: \"green\",\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t\t7\n\t\t\t\t\t\t);\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t});\n\t\t}\n\n\t\tif (frm.doc.gstin_address_line || frm.doc.gstin_city) {\n\t\t\tfrm.add_custom_button(__(\"Address Same as GSTIN\"), () => {\n\t\t\t\tfrappe.confirm(__(\"Copy the GSTIN-registered address into the Address fields above?\"), () => {\n\t\t\t\t\tfrm.set_value(\"firm_address\", frm.doc.gstin_address_line);\n\t\t\t\t\tfrm.set_value(\"city\", frm.doc.gstin_city);\n\t\t\t\t\tfrm.set_value(\"state\", frm.doc.gstin_state);\n\t\t\t\t\tfrm.set_value(\"pincode\", frm.doc.gstin_pincode);\n\t\t\t\t\tfrm.set_value(\"country\", \"India\");\n\t\t\t\t});\n\t\t\t});\n\t\t}\n\t},\n});\n",
+  "view": "Form"
+ }
+]

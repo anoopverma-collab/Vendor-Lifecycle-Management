@@ -1,0 +1,21 @@
+{
+ "app": "vendor_lifecycle",
+ "creation": "2026-08-03 14:40:06.931794",
+ "docstatus": 0,
+ "doctype": "Desktop Icon",
+ "hidden": 0,
+ "icon": "non-profit",
+ "icon_type": "Link",
+ "idx": 1,
+ "label": "Vendor Lifecycle",
+ "link_to": "Vendor Lifecycle",
+ "link_type": "Workspace Sidebar",
+ "modified": "2026-08-03 14:40:06.931794",
+ "modified_by": "Administrator",
+ "name": "Vendor Lifecycle",
+ "owner": "Administrator",
+ "parent_icon": "ERPNext",
+ "restrict_removal": 0,
+ "roles": [],
+ "standard": 1
+}

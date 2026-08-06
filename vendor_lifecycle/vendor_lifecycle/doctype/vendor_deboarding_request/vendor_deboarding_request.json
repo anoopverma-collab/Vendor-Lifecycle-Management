@@ -1,0 +1,180 @@
+{
+ "actions": [],
+ "autoname": "VDR-.YYYY.-.#####",
+ "creation": "2026-08-03 13:08:45.433369",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "field_order": [
+  "vendor",
+  "reason",
+  "request_date",
+  "status",
+  "column_break_top",
+  "behavior_rating",
+  "quality_rating",
+  "process_rating",
+  "rejection_percentage",
+  "is_resolvable",
+  "section_break_open_transactions",
+  "open_transactions_summary",
+  "section_break_clearance",
+  "clearance_attachment",
+  "clearance_exception_reason",
+  "section_break_remarks",
+  "remarks"
+ ],
+ "fields": [
+  {
+   "fieldname": "vendor",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Vendor",
+   "options": "Supplier",
+   "reqd": 1
+  },
+  {
+   "fieldname": "reason",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Reason",
+   "options": "Deboarding Reason"
+  },
+  {
+   "default": "Today",
+   "fieldname": "request_date",
+   "fieldtype": "Date",
+   "label": "Request Date",
+   "reqd": 1
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Draft\nApproved\nVendor Disabled",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_top",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "behavior_rating",
+   "fieldtype": "Rating",
+   "label": "Vendor Behaviour"
+  },
+  {
+   "fieldname": "quality_rating",
+   "fieldtype": "Rating",
+   "label": "Vendor Product Quality"
+  },
+  {
+   "fieldname": "process_rating",
+   "fieldtype": "Rating",
+   "label": "Understanding of Our Process"
+  },
+  {
+   "fieldname": "rejection_percentage",
+   "fieldtype": "Percent",
+   "label": "Overall Rejection Percentage"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_resolvable",
+   "fieldtype": "Check",
+   "label": "Is the Issue with the Vendor Resolvable?"
+  },
+  {
+   "fieldname": "section_break_open_transactions",
+   "fieldtype": "Section Break",
+   "label": "Open Transactions (informational \u2014 does not block deboarding)"
+  },
+  {
+   "fieldname": "open_transactions_summary",
+   "fieldtype": "HTML",
+   "label": "Open Transactions"
+  },
+  {
+   "fieldname": "section_break_clearance",
+   "fieldtype": "Section Break",
+   "label": "Clearance Certificate"
+  },
+  {
+   "fieldname": "clearance_attachment",
+   "fieldtype": "Attach",
+   "label": "Clearance Certificate Sign-Off"
+  },
+  {
+   "depends_on": "eval:!doc.clearance_attachment",
+   "fieldname": "clearance_exception_reason",
+   "fieldtype": "Small Text",
+   "label": "Reason Clearance Certificate Is Not Attached",
+   "mandatory_depends_on": "eval:!doc.clearance_attachment"
+  },
+  {
+   "fieldname": "section_break_remarks",
+   "fieldtype": "Section Break",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Text Editor",
+   "label": "Remarks"
+  }
+ ],
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-08-03 13:08:45.433369",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "Vendor Deboarding Request",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Vendor Lifecycle Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Vendor Lifecycle User",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
