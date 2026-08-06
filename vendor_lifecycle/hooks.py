@@ -8,7 +8,46 @@ app_license = "mit"
 # Apps
 # ------------------
 
-# required_apps = []
+required_apps = ["erpnext"]
+
+# Exposes Vendor Lifecycle Settings values the Desk UI needs synchronously
+# (e.g. to hide a button or toggle a field as mandatory) to every logged-in
+# user regardless of their read permission on the Settings doctype itself —
+# a plain client-side frappe.db.get_single_value() call would silently fail
+# for roles (like Vendor Lifecycle User) that can't read Settings directly.
+extend_bootinfo = "vendor_lifecycle.vendor_lifecycle.boot.set_bootinfo"
+
+# Registry of e-sign providers for Vendor Sign Off, resolved in
+# vendor_lifecycle.integrations.dispatch.get_esign_handler. Another app can add
+# a provider (e.g. Digio) by declaring the same hook key with its own handler
+# path — no changes to this app are needed.
+vendor_lifecycle_esign_providers = {
+	"Manual": "vendor_lifecycle.vendor_lifecycle.integrations.esign.manual.ManualESignHandler"
+}
+
+# Same registry pattern, for the deboarding-checklist-completion notification slot.
+vendor_lifecycle_notification_providers = {
+	"Manual": "vendor_lifecycle.vendor_lifecycle.integrations.notification.manual.ManualNotificationHandler"
+}
+
+fixtures = [
+	{
+		"doctype": "Role",
+		"filters": [["role_name", "in", ["Vendor Lifecycle Manager", "Vendor Lifecycle User"]]]
+	},
+	{
+		"doctype": "Custom Field",
+		"filters": [["module", "=", "Vendor Lifecycle"]]
+	},
+	{
+		"doctype": "Property Setter",
+		"filters": [["module", "=", "Vendor Lifecycle"]]
+	},
+	{
+		"doctype": "Client Script",
+		"filters": [["module", "=", "Vendor Lifecycle"]]
+	},
+]
 
 # Each item in the list will be shown as an app in the apps page
 # add_to_apps_screen = [
@@ -85,8 +124,13 @@ app_license = "mit"
 # Installation
 # ------------
 
-# before_install = "vendor_lifecycle.install.before_install"
-# after_install = "vendor_lifecycle.install.after_install"
+after_install = "vendor_lifecycle.vendor_lifecycle.install.after_install"
+
+# Runs on every `bench migrate`, not just install — keeps the shipped
+# Workspace Sidebar / Desktop Icon in sync even after later edits to those
+# files (Frappe doesn't auto-import them the way it does other standard
+# doctypes). See vendor_lifecycle/install.py for why this is needed.
+after_migrate = "vendor_lifecycle.vendor_lifecycle.install.after_migrate"
 
 # Uninstallation
 # ------------
@@ -126,46 +170,49 @@ app_license = "mit"
 # -----------
 # Permissions evaluated in scripted ways
 
-# permission_query_conditions = {
-# 	"Event": "frappe.desk.doctype.event.event.get_permission_query_conditions",
-# }
-#
-# has_permission = {
-# 	"Event": "frappe.desk.doctype.event.event.has_permission",
-# }
+permission_query_conditions = {
+	"Vendor Satisfaction Survey": "vendor_lifecycle.vendor_lifecycle.permissions.vendor_satisfaction_survey_query_conditions",
+	"Vendor Support Ticket": "vendor_lifecycle.vendor_lifecycle.permissions.vendor_support_ticket_query_conditions",
+}
+
+has_permission = {
+	"Vendor Satisfaction Survey": "vendor_lifecycle.vendor_lifecycle.permissions.vendor_satisfaction_survey_has_permission",
+	"Vendor Support Ticket": "vendor_lifecycle.vendor_lifecycle.permissions.vendor_support_ticket_has_permission",
+}
 
 # Document Events
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+doc_events = {
+	"Purchase Order": {
+		"validate": "vendor_lifecycle.vendor_lifecycle.deboarding_guard.block_disabled_supplier_on_order",
+	},
+	"Request for Quotation": {
+		"validate": "vendor_lifecycle.vendor_lifecycle.deboarding_guard.block_disabled_supplier_on_order",
+	},
+	"Purchase Invoice": {
+		"validate": "vendor_lifecycle.vendor_lifecycle.deboarding_guard.warn_disabled_supplier_on_transaction",
+	},
+	"Purchase Receipt": {
+		"validate": "vendor_lifecycle.vendor_lifecycle.deboarding_guard.warn_disabled_supplier_on_transaction",
+	},
+	"Journal Entry": {
+		"validate": "vendor_lifecycle.vendor_lifecycle.deboarding_guard.warn_disabled_supplier_on_transaction",
+	},
+	"Payment Entry": {
+		"validate": "vendor_lifecycle.vendor_lifecycle.deboarding_guard.warn_disabled_supplier_on_transaction",
+	},
+}
 
 # Scheduled Tasks
 # ---------------
 
-# scheduler_events = {
-# 	"all": [
-# 		"vendor_lifecycle.tasks.all"
-# 	],
-# 	"daily": [
-# 		"vendor_lifecycle.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"vendor_lifecycle.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"vendor_lifecycle.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"vendor_lifecycle.tasks.monthly"
-# 	],
-# }
+scheduler_events = {
+	"daily": [
+		"vendor_lifecycle.vendor_lifecycle.tasks.create_pending_satisfaction_surveys",
+	],
+}
 
 # Testing
 # -------

@@ -1,0 +1,41 @@
+{
+ "actions": [],
+ "creation": "2026-08-03 12:51:42.036303",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "criteria",
+  "score"
+ ],
+ "fields": [
+  {
+   "fieldname": "criteria",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Criteria",
+   "options": "Rating Criteria",
+   "reqd": 1
+  },
+  {
+   "description": "1 (worst) to 5 (best).",
+   "fieldname": "score",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Score",
+   "non_negative": 1,
+   "reqd": 1
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-03 12:51:42.036303",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "Vendor Reference Rating",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

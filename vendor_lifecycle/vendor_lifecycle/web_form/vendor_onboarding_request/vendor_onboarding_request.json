@@ -1,0 +1,341 @@
+{
+ "allow_comments": 0,
+ "allow_delete": 0,
+ "allow_edit": 0,
+ "allow_incomplete": 0,
+ "allow_multiple": 1,
+ "allow_print": 0,
+ "apply_document_permissions": 0,
+ "breadcrumbs": "",
+ "button_label": "Submit",
+ "client_script": "",
+ "creation": "2026-08-03 12:40:30.491883",
+ "doc_type": "Vendor Onboarding Request",
+ "docstatus": 0,
+ "doctype": "Web Form",
+ "introduction_text": "Tell us about your business. Our team will review your submission and follow up on next steps.",
+ "is_standard": 1,
+ "login_required": 0,
+ "max_attachment_size": 0,
+ "modified": "2026-08-03 12:40:30.491883",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "vendor-onboarding-request",
+ "owner": "Administrator",
+ "published": 1,
+ "route": "vendor-onboarding-request",
+ "route_to_success_link": 0,
+ "show_attachments": 0,
+ "show_list": 0,
+ "show_sidebar": 1,
+ "success_message": "Thank you. Your onboarding request has been submitted and will be reviewed by our team.",
+ "title": "Vendor Onboarding Request",
+ "web_form_fields": [
+  {
+   "fieldname": "section_break_company",
+   "fieldtype": "Section Break",
+   "label": "Company Details"
+  },
+  {
+   "fieldname": "company_name",
+   "fieldtype": "Data",
+   "label": "Company / Firm Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "business_type",
+   "fieldtype": "Select",
+   "label": "Business Type",
+   "options": "\nManufacturer\nTrader\nService Provider\nContractor / Job Worker\nLogistics / Transporter\nFreelancer / Consultant\nRaw Material Supplier\nEquipment / Machinery Supplier\nTechnology / Software Vendor\nFacility / Maintenance Services\nOther",
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Other'",
+   "fieldname": "other_business_type",
+   "fieldtype": "Data",
+   "label": "Please Specify Business Type",
+   "reqd": 0
+  },
+  {
+   "fieldname": "section_break_contact",
+   "fieldtype": "Section Break",
+   "label": "Contact"
+  },
+  {
+   "fieldname": "contact_person",
+   "fieldtype": "Data",
+   "label": "Contact Person",
+   "reqd": 1
+  },
+  {
+   "fieldname": "contact_number",
+   "fieldtype": "Phone",
+   "label": "Contact Number",
+   "reqd": 1
+  },
+  {
+   "fieldname": "email",
+   "fieldtype": "Data",
+   "label": "Email",
+   "options": "Email",
+   "reqd": 1
+  },
+  {
+   "fieldname": "website",
+   "fieldtype": "Data",
+   "label": "Website"
+  },
+  {
+   "fieldname": "section_break_address",
+   "fieldtype": "Section Break",
+   "label": "Address"
+  },
+  {
+   "fieldname": "business_address",
+   "fieldtype": "Small Text",
+   "label": "Business Address"
+  },
+  {
+   "fieldname": "city",
+   "fieldtype": "Data",
+   "label": "City"
+  },
+  {
+   "fieldname": "state",
+   "fieldtype": "Data",
+   "label": "State"
+  },
+  {
+   "fieldname": "country",
+   "fieldtype": "Link",
+   "label": "Country",
+   "options": "Country"
+  },
+  {
+   "fieldname": "pincode",
+   "fieldtype": "Data",
+   "label": "Postal / ZIP Code"
+  },
+  {
+   "fieldname": "tax_id",
+   "fieldtype": "Data",
+   "label": "Tax ID (PAN / VAT / EIN, etc.)"
+  },
+  {
+   "depends_on": "eval:doc.country=='India'",
+   "description": "India-specific — shown only when Country is India.",
+   "fieldname": "gstin_uin",
+   "fieldtype": "Data",
+   "label": "GSTIN / UIN"
+  },
+  {
+   "fieldname": "section_break_business",
+   "fieldtype": "Section Break",
+   "label": "Business Details"
+  },
+  {
+   "depends_on": "eval:!doc.business_type",
+   "fieldname": "business_details_hint",
+   "fieldtype": "HTML",
+   "options": "<p class=\"text-muted\">Kindly select Business Type above to fill Business Details.</p>"
+  },
+  {
+   "fieldname": "estimated_monthly_capacity",
+   "fieldtype": "Int",
+   "label": "Estimated Monthly Capacity",
+   "depends_on": "eval:doc.business_type",
+   "mandatory_depends_on": "eval:doc.business_type"
+  },
+  {
+   "fieldname": "specialization",
+   "fieldtype": "Data",
+   "label": "Specialization",
+   "depends_on": "eval:doc.business_type",
+   "mandatory_depends_on": "eval:doc.business_type"
+  },
+  {
+   "fieldname": "years_in_business",
+   "fieldtype": "Int",
+   "label": "Years in Business",
+   "depends_on": "eval:doc.business_type",
+   "mandatory_depends_on": "eval:doc.business_type"
+  },
+  {
+   "fieldname": "team_size",
+   "fieldtype": "Int",
+   "label": "Team Size",
+   "depends_on": "eval:doc.business_type",
+   "mandatory_depends_on": "eval:doc.business_type"
+  },
+  {
+   "fieldname": "referral_source",
+   "fieldtype": "Select",
+   "label": "How Did You Hear About Us?",
+   "options": "\nGoogle Search\nSocial Media\nReferral from Existing Vendor\nTrade Show / Event\nAdvertisement\nOther",
+   "depends_on": "eval:doc.business_type"
+  },
+  {
+   "depends_on": "eval:doc.referral_source=='Other'",
+   "fieldname": "referral_source_other",
+   "fieldtype": "Data",
+   "label": "Please Specify",
+   "mandatory_depends_on": "eval:doc.referral_source=='Other'"
+  },
+  {
+   "depends_on": "eval:doc.referral_source=='Referral from Existing Vendor'",
+   "fieldname": "existing_vendor_name",
+   "fieldtype": "Data",
+   "label": "Name of Referring Vendor",
+   "mandatory_depends_on": "eval:doc.referral_source=='Referral from Existing Vendor'"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Manufacturer'",
+   "fieldname": "equipment_count",
+   "fieldtype": "Int",
+   "label": "Total Machines / Production Equipment",
+   "mandatory_depends_on": "eval:doc.business_type=='Manufacturer'"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Trader'",
+   "fieldname": "brands_distributed",
+   "fieldtype": "Small Text",
+   "label": "Brands / Sources You Distribute",
+   "mandatory_depends_on": "eval:doc.business_type=='Trader'"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Trader'",
+   "fieldname": "minimum_order_quantity",
+   "fieldtype": "Data",
+   "label": "Minimum Order Quantity",
+   "mandatory_depends_on": "eval:doc.business_type=='Trader'"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Service Provider'",
+   "fieldname": "service_types_offered",
+   "fieldtype": "Small Text",
+   "label": "Types of Services Offered",
+   "mandatory_depends_on": "eval:doc.business_type=='Service Provider'"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Service Provider'",
+   "fieldname": "turnaround_time",
+   "fieldtype": "Data",
+   "label": "Typical Turnaround Time",
+   "mandatory_depends_on": "eval:doc.business_type=='Service Provider'"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Contractor / Job Worker'",
+   "fieldname": "scope_of_work",
+   "fieldtype": "Small Text",
+   "label": "Scope of Work",
+   "mandatory_depends_on": "eval:doc.business_type=='Contractor / Job Worker'"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Contractor / Job Worker'",
+   "fieldname": "equipment_provided_by",
+   "fieldtype": "Select",
+   "label": "Equipment Provided By",
+   "options": "\nVendor\nUs\nBoth",
+   "mandatory_depends_on": "eval:doc.business_type=='Contractor / Job Worker'"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Logistics / Transporter'",
+   "fieldname": "fleet_size",
+   "fieldtype": "Int",
+   "label": "Fleet Size",
+   "mandatory_depends_on": "eval:doc.business_type=='Logistics / Transporter'"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Logistics / Transporter' || doc.business_type=='Facility / Maintenance Services'",
+   "fieldname": "coverage_area",
+   "fieldtype": "Small Text",
+   "label": "Coverage Area / Regions Served",
+   "mandatory_depends_on": "eval:doc.business_type=='Logistics / Transporter' || doc.business_type=='Facility / Maintenance Services'"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Freelancer / Consultant'",
+   "fieldname": "areas_of_expertise",
+   "fieldtype": "Small Text",
+   "label": "Areas of Expertise",
+   "mandatory_depends_on": "eval:doc.business_type=='Freelancer / Consultant'"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Freelancer / Consultant'",
+   "fieldname": "availability_hours_per_week",
+   "fieldtype": "Int",
+   "label": "Availability (Hours/Week)",
+   "mandatory_depends_on": "eval:doc.business_type=='Freelancer / Consultant'"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Raw Material Supplier'",
+   "fieldname": "materials_supplied",
+   "fieldtype": "Small Text",
+   "label": "Materials Supplied",
+   "mandatory_depends_on": "eval:doc.business_type=='Raw Material Supplier'"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Raw Material Supplier'",
+   "fieldname": "certification_standards",
+   "fieldtype": "Data",
+   "label": "Certifications / Standards (ISO, etc.)",
+   "mandatory_depends_on": "eval:doc.business_type=='Raw Material Supplier'"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Equipment / Machinery Supplier'",
+   "fieldname": "equipment_types",
+   "fieldtype": "Small Text",
+   "label": "Equipment / Machinery Types",
+   "mandatory_depends_on": "eval:doc.business_type=='Equipment / Machinery Supplier'"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Equipment / Machinery Supplier'",
+   "fieldname": "warranty_support_offered",
+   "fieldtype": "Check",
+   "label": "Warranty / After-Sales Support Offered"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Technology / Software Vendor'",
+   "fieldname": "product_or_platform_name",
+   "fieldtype": "Data",
+   "label": "Product / Platform Name",
+   "mandatory_depends_on": "eval:doc.business_type=='Technology / Software Vendor'"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Technology / Software Vendor'",
+   "fieldname": "support_sla",
+   "fieldtype": "Data",
+   "label": "Support / SLA Terms",
+   "mandatory_depends_on": "eval:doc.business_type=='Technology / Software Vendor'"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Facility / Maintenance Services'",
+   "fieldname": "services_covered",
+   "fieldtype": "Small Text",
+   "label": "Services Covered",
+   "mandatory_depends_on": "eval:doc.business_type=='Facility / Maintenance Services'"
+  },
+  {
+   "fieldname": "section_break_profile",
+   "fieldtype": "Section Break",
+   "label": "Profile & Catalogue"
+  },
+  {
+   "description": "Maximum file size: 10 MB.",
+   "fieldname": "profile_attachment",
+   "fieldtype": "Attach",
+   "label": "Business / Capability Profile"
+  },
+  {
+   "description": "Maximum file size: 10 MB.",
+   "fieldname": "catalogue_attachment",
+   "fieldtype": "Attach",
+   "label": "Products / Services Catalogue"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description of Products / Services Offered"
+  }
+ ],
+ "custom_css": ""
+}
