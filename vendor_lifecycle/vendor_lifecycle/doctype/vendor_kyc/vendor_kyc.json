@@ -1,0 +1,632 @@
+{
+ "actions": [],
+ "autoname": "KYC-.YYYY.-.#####",
+ "creation": "2026-08-03 12:40:30.491883",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "field_order": [
+  "onboarding_request",
+  "supplier",
+  "status",
+  "section_break_firm",
+  "firm_name",
+  "supplier_name_override",
+  "legal_entity_type",
+  "business_type",
+  "other_business_type",
+  "owner_name",
+  "official_email",
+  "owner_contact",
+  "owner_id_proof",
+  "column_break_firm",
+  "contact_person_name",
+  "contact_person_number",
+  "contact_person_id_proof",
+  "reference_name",
+  "reference_contact",
+  "section_break_business_details",
+  "business_details_hint",
+  "estimated_monthly_capacity",
+  "specialization",
+  "years_in_business",
+  "team_size",
+  "column_break_business_details",
+  "equipment_count",
+  "brands_distributed",
+  "minimum_order_quantity",
+  "service_types_offered",
+  "turnaround_time",
+  "scope_of_work",
+  "equipment_provided_by",
+  "fleet_size",
+  "coverage_area",
+  "areas_of_expertise",
+  "availability_hours_per_week",
+  "materials_supplied",
+  "certification_standards",
+  "equipment_types",
+  "warranty_support_offered",
+  "product_or_platform_name",
+  "support_sla",
+  "services_covered",
+  "section_break_address",
+  "firm_address",
+  "city",
+  "state",
+  "country",
+  "pincode",
+  "address_type",
+  "geo_location",
+  "column_break_address",
+  "preferred_working_mode",
+  "other_companies_worked_with",
+  "section_break_gstin_address",
+  "gstin_address_line",
+  "gstin_city",
+  "gstin_state",
+  "gstin_pincode",
+  "is_address_same_as_gstin",
+  "section_break_compliance",
+  "tax_id",
+  "gstin_uin",
+  "column_break_compliance",
+  "business_registration_number",
+  "tax_certificate",
+  "section_break_supplier_setup",
+  "supplier_group",
+  "billing_currency",
+  "column_break_supplier_setup",
+  "payment_terms_template",
+  "tax_withholding_category",
+  "section_break_bank",
+  "bank_account_name",
+  "bank",
+  "ifsc_branch_code",
+  "column_break_bank",
+  "bank_account_no",
+  "account_type",
+  "is_default_bank_account",
+  "bank_proof",
+  "bank_statement",
+  "section_break_workforce",
+  "workforce"
+ ],
+ "fields": [
+  {
+   "fieldname": "onboarding_request",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Onboarding Request",
+   "options": "Vendor Onboarding Request",
+   "read_only": 1
+  },
+  {
+   "fieldname": "supplier",
+   "fieldtype": "Link",
+   "label": "Supplier",
+   "options": "Supplier",
+   "read_only": 1
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Draft\nVerified",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_firm",
+   "fieldtype": "Section Break",
+   "label": "Firm"
+  },
+  {
+   "fieldname": "firm_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Firm Name",
+   "reqd": 1
+  },
+  {
+   "description": "If set, the Supplier record uses this instead of Firm Name — e.g. when the legal firm name and the name the vendor trades under differ.",
+   "fieldname": "supplier_name_override",
+   "fieldtype": "Data",
+   "label": "Supplier Name (if different from Firm Name)"
+  },
+  {
+   "fieldname": "legal_entity_type",
+   "fieldtype": "Select",
+   "label": "Legal Entity Type",
+   "options": "\nSole Proprietorship\nPartnership\nLimited Liability Partnership\nPrivate Limited Company\nPublic Limited Company\nCorporation\nNon-Profit\nGovernment Entity\nOther"
+  },
+  {
+   "fieldname": "business_type",
+   "fieldtype": "Select",
+   "label": "Business Type",
+   "options": "\nManufacturer\nTrader\nService Provider\nContractor / Job Worker\nLogistics / Transporter\nFreelancer / Consultant\nRaw Material Supplier\nEquipment / Machinery Supplier\nTechnology / Software Vendor\nFacility / Maintenance Services\nOther"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Other'",
+   "fieldname": "other_business_type",
+   "fieldtype": "Data",
+   "label": "Please Specify Business Type"
+  },
+  {
+   "fieldname": "owner_name",
+   "fieldtype": "Data",
+   "label": "Firm Owner / Director Name"
+  },
+  {
+   "fieldname": "official_email",
+   "fieldtype": "Data",
+   "label": "Official Email",
+   "options": "Email"
+  },
+  {
+   "fieldname": "owner_contact",
+   "fieldtype": "Phone",
+   "label": "Owner Contact Number"
+  },
+  {
+   "fieldname": "owner_id_proof",
+   "fieldtype": "Attach",
+   "label": "Owner ID Proof"
+  },
+  {
+   "fieldname": "column_break_firm",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "contact_person_name",
+   "fieldtype": "Data",
+   "label": "Contact Person Name"
+  },
+  {
+   "fieldname": "contact_person_number",
+   "fieldtype": "Phone",
+   "label": "Contact Person Number"
+  },
+  {
+   "fieldname": "contact_person_id_proof",
+   "fieldtype": "Attach",
+   "label": "Contact Person ID Proof"
+  },
+  {
+   "fieldname": "reference_name",
+   "fieldtype": "Data",
+   "label": "Reference Name"
+  },
+  {
+   "fieldname": "reference_contact",
+   "fieldtype": "Phone",
+   "label": "Reference Contact Number"
+  },
+  {
+   "fieldname": "section_break_business_details",
+   "fieldtype": "Section Break",
+   "label": "Business Details"
+  },
+  {
+   "depends_on": "eval:!doc.business_type",
+   "fieldname": "business_details_hint",
+   "fieldtype": "HTML",
+   "options": "<p class=\"text-muted\">Kindly select Business Type above to see the relevant Business Details.</p>"
+  },
+  {
+   "depends_on": "eval:doc.business_type",
+   "fieldname": "estimated_monthly_capacity",
+   "fieldtype": "Int",
+   "label": "Estimated Monthly Capacity"
+  },
+  {
+   "depends_on": "eval:doc.business_type",
+   "fieldname": "specialization",
+   "fieldtype": "Data",
+   "label": "Specialization"
+  },
+  {
+   "depends_on": "eval:doc.business_type",
+   "fieldname": "years_in_business",
+   "fieldtype": "Int",
+   "label": "Years in Business"
+  },
+  {
+   "depends_on": "eval:doc.business_type",
+   "fieldname": "team_size",
+   "fieldtype": "Int",
+   "label": "Team Size"
+  },
+  {
+   "fieldname": "column_break_business_details",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Manufacturer'",
+   "fieldname": "equipment_count",
+   "fieldtype": "Int",
+   "label": "Total Machines / Production Equipment"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Trader'",
+   "fieldname": "brands_distributed",
+   "fieldtype": "Small Text",
+   "label": "Brands / Sources You Distribute"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Trader'",
+   "fieldname": "minimum_order_quantity",
+   "fieldtype": "Data",
+   "label": "Minimum Order Quantity"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Service Provider'",
+   "fieldname": "service_types_offered",
+   "fieldtype": "Small Text",
+   "label": "Types of Services Offered"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Service Provider'",
+   "fieldname": "turnaround_time",
+   "fieldtype": "Data",
+   "label": "Typical Turnaround Time"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Contractor / Job Worker'",
+   "fieldname": "scope_of_work",
+   "fieldtype": "Small Text",
+   "label": "Scope of Work"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Contractor / Job Worker'",
+   "fieldname": "equipment_provided_by",
+   "fieldtype": "Select",
+   "label": "Equipment Provided By",
+   "options": "\nVendor\nUs\nBoth"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Logistics / Transporter'",
+   "fieldname": "fleet_size",
+   "fieldtype": "Int",
+   "label": "Fleet Size"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Logistics / Transporter' || doc.business_type=='Facility / Maintenance Services'",
+   "fieldname": "coverage_area",
+   "fieldtype": "Small Text",
+   "label": "Coverage Area / Regions Served"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Freelancer / Consultant'",
+   "fieldname": "areas_of_expertise",
+   "fieldtype": "Small Text",
+   "label": "Areas of Expertise"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Freelancer / Consultant'",
+   "fieldname": "availability_hours_per_week",
+   "fieldtype": "Int",
+   "label": "Availability (Hours/Week)"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Raw Material Supplier'",
+   "fieldname": "materials_supplied",
+   "fieldtype": "Small Text",
+   "label": "Materials Supplied"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Raw Material Supplier'",
+   "fieldname": "certification_standards",
+   "fieldtype": "Data",
+   "label": "Certifications / Standards (ISO, etc.)"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Equipment / Machinery Supplier'",
+   "fieldname": "equipment_types",
+   "fieldtype": "Small Text",
+   "label": "Equipment / Machinery Types"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.business_type=='Equipment / Machinery Supplier'",
+   "fieldname": "warranty_support_offered",
+   "fieldtype": "Check",
+   "label": "Warranty / After-Sales Support Offered"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Technology / Software Vendor'",
+   "fieldname": "product_or_platform_name",
+   "fieldtype": "Data",
+   "label": "Product / Platform Name"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Technology / Software Vendor'",
+   "fieldname": "support_sla",
+   "fieldtype": "Data",
+   "label": "Support / SLA Terms"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Facility / Maintenance Services'",
+   "fieldname": "services_covered",
+   "fieldtype": "Small Text",
+   "label": "Services Covered"
+  },
+  {
+   "fieldname": "section_break_address",
+   "fieldtype": "Section Break",
+   "label": "Address"
+  },
+  {
+   "fieldname": "firm_address",
+   "fieldtype": "Small Text",
+   "label": "Firm Address"
+  },
+  {
+   "fieldname": "city",
+   "fieldtype": "Data",
+   "label": "City"
+  },
+  {
+   "fieldname": "state",
+   "fieldtype": "Data",
+   "label": "State"
+  },
+  {
+   "fieldname": "country",
+   "fieldtype": "Link",
+   "label": "Country",
+   "options": "Country"
+  },
+  {
+   "fieldname": "pincode",
+   "fieldtype": "Data",
+   "label": "Postal / ZIP Code"
+  },
+  {
+   "fieldname": "address_type",
+   "fieldtype": "Select",
+   "label": "Address Type",
+   "options": "\nBilling\nShipping\nOffice\nPersonal\nPlant\nPostal\nShop\nSubsidiary\nWarehouse\nCurrent\nPermanent\nOther"
+  },
+  {
+   "fieldname": "geo_location",
+   "fieldtype": "Data",
+   "label": "Firm Map Location"
+  },
+  {
+   "fieldname": "column_break_address",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "preferred_working_mode",
+   "fieldtype": "Select",
+   "label": "Preferred Way of Working",
+   "options": "\nDirect\nThrough Agent"
+  },
+  {
+   "fieldname": "other_companies_worked_with",
+   "fieldtype": "Small Text",
+   "label": "Other Companies Worked With"
+  },
+  {
+   "depends_on": "eval:doc.country=='India' && doc.gstin_uin",
+   "fieldname": "section_break_gstin_address",
+   "fieldtype": "Section Break",
+   "label": "Address Verification (GSTIN)"
+  },
+  {
+   "description": "Fetched from the GST database using the \"Fetch Address from GSTIN\" button. Requires the India Compliance app to be installed and configured — if it isn't, this stays blank and only the manually filled address above is used.",
+   "fieldname": "gstin_address_line",
+   "fieldtype": "Small Text",
+   "label": "GSTIN Registered Address",
+   "read_only": 1
+  },
+  {
+   "fieldname": "gstin_city",
+   "fieldtype": "Data",
+   "label": "GSTIN City",
+   "read_only": 1
+  },
+  {
+   "fieldname": "gstin_state",
+   "fieldtype": "Data",
+   "label": "GSTIN State",
+   "read_only": 1
+  },
+  {
+   "fieldname": "gstin_pincode",
+   "fieldtype": "Data",
+   "label": "GSTIN Postal Code",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "description": "If checked, only the GSTIN-registered address is used when creating the vendor's Address record. If unchecked, both the address filled in above and the GSTIN address are created as separate records.",
+   "fieldname": "is_address_same_as_gstin",
+   "fieldtype": "Check",
+   "label": "Address Same as GSTIN Registered Address"
+  },
+  {
+   "fieldname": "section_break_compliance",
+   "fieldtype": "Section Break",
+   "label": "Compliance Documents"
+  },
+  {
+   "fieldname": "tax_id",
+   "fieldtype": "Data",
+   "label": "Tax ID (PAN / VAT / EIN, etc.)"
+  },
+  {
+   "depends_on": "eval:doc.country=='India'",
+   "description": "India-specific — shown only when Country is India.",
+   "fieldname": "gstin_uin",
+   "fieldtype": "Data",
+   "label": "GSTIN / UIN"
+  },
+  {
+   "fieldname": "column_break_compliance",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Company/incorporation registration number, where this is issued separately from the tax ID.",
+   "fieldname": "business_registration_number",
+   "fieldtype": "Data",
+   "label": "Business Registration Number"
+  },
+  {
+   "fieldname": "tax_certificate",
+   "fieldtype": "Attach",
+   "label": "Tax Registration Certificate"
+  },
+  {
+   "fieldname": "section_break_supplier_setup",
+   "fieldtype": "Section Break",
+   "label": "Supplier Setup"
+  },
+  {
+   "fieldname": "supplier_group",
+   "fieldtype": "Link",
+   "label": "Supplier Group",
+   "options": "Supplier Group"
+  },
+  {
+   "fieldname": "billing_currency",
+   "fieldtype": "Link",
+   "label": "Billing Currency",
+   "options": "Currency"
+  },
+  {
+   "fieldname": "column_break_supplier_setup",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "payment_terms_template",
+   "fieldtype": "Link",
+   "label": "Payment Terms Template",
+   "options": "Payment Terms Template"
+  },
+  {
+   "fieldname": "tax_withholding_category",
+   "fieldtype": "Link",
+   "label": "Tax Withholding Category",
+   "options": "Tax Withholding Category"
+  },
+  {
+   "fieldname": "section_break_bank",
+   "fieldtype": "Section Break",
+   "label": "Bank Details"
+  },
+  {
+   "fieldname": "bank_account_name",
+   "fieldtype": "Data",
+   "label": "Bank Account Name"
+  },
+  {
+   "fieldname": "bank",
+   "fieldtype": "Link",
+   "label": "Bank",
+   "options": "Bank"
+  },
+  {
+   "fieldname": "ifsc_branch_code",
+   "fieldtype": "Data",
+   "label": "IFSC Code / Branch Code"
+  },
+  {
+   "fieldname": "column_break_bank",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "bank_account_no",
+   "fieldtype": "Data",
+   "label": "Bank Account No."
+  },
+  {
+   "fieldname": "account_type",
+   "fieldtype": "Link",
+   "label": "Account Type",
+   "options": "Bank Account Type"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_default_bank_account",
+   "fieldtype": "Check",
+   "label": "Is Default Bank Account"
+  },
+  {
+   "fieldname": "bank_proof",
+   "fieldtype": "Attach",
+   "label": "Bank Proof (Cancelled Cheque)"
+  },
+  {
+   "fieldname": "bank_statement",
+   "fieldtype": "Attach",
+   "label": "Bank Statement"
+  },
+  {
+   "fieldname": "section_break_workforce",
+   "fieldtype": "Section Break",
+   "label": "Workforce"
+  },
+  {
+   "fieldname": "workforce",
+   "fieldtype": "Table",
+   "label": "Workforce Details",
+   "options": "Vendor KYC Workforce Detail"
+  }
+ ],
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-08-03 12:40:30.491883",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "Vendor KYC",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Vendor Lifecycle Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Vendor Lifecycle User",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
