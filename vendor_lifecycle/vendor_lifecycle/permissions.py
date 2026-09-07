@@ -24,6 +24,25 @@ def get_supplier_portal_vendors(user):
 	).run(pluck="name")
 
 
+def get_active_supplier_portal_vendors(user):
+	"""Same as get_supplier_portal_vendors, filtered down to Suppliers that
+	are currently enabled and not on hold — a portal user shouldn't be able
+	to file anything new against a vendor account that's since been
+	disabled/frozen, even though the Portal User link itself is still
+	there. Used for creation-time vendor resolution only (which vendor a
+	new record gets attached to) — not for read-scoping existing records,
+	so a vendor doesn't lose visibility into their own history just because
+	the account was disabled later."""
+	vendors = get_supplier_portal_vendors(user)
+	if not vendors:
+		return []
+	return frappe.get_all(
+		"Supplier",
+		filters={"name": ["in", vendors], "disabled": 0, "on_hold": 0},
+		pluck="name",
+	)
+
+
 def supplier_portal_permission_query_conditions(user, doctype):
 	if not user:
 		user = frappe.session.user

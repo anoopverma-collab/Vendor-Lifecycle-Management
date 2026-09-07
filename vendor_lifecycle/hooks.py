@@ -17,19 +17,6 @@ required_apps = ["erpnext"]
 # for roles (like Vendor Lifecycle User) that can't read Settings directly.
 extend_bootinfo = "vendor_lifecycle.vendor_lifecycle.boot.set_bootinfo"
 
-# Registry of e-sign providers for Vendor Sign Off, resolved in
-# vendor_lifecycle.integrations.dispatch.get_esign_handler. Another app can add
-# a provider (e.g. Digio) by declaring the same hook key with its own handler
-# path — no changes to this app are needed.
-vendor_lifecycle_esign_providers = {
-	"Manual": "vendor_lifecycle.vendor_lifecycle.integrations.esign.manual.ManualESignHandler"
-}
-
-# Same registry pattern, for the deboarding-checklist-completion notification slot.
-vendor_lifecycle_notification_providers = {
-	"Manual": "vendor_lifecycle.vendor_lifecycle.integrations.notification.manual.ManualNotificationHandler"
-}
-
 fixtures = [
 	{
 		"doctype": "Role",
@@ -44,8 +31,12 @@ fixtures = [
 		"filters": [["module", "=", "Vendor Lifecycle"]]
 	},
 	{
-		"doctype": "Client Script",
-		"filters": [["module", "=", "Vendor Lifecycle"]]
+		# Connections added to Supplier (a core ERPNext doctype we don't
+		# own) via the same "custom" DocType Link mechanism Customize Form
+		# itself uses — there's no `module` field on this child doctype to
+		# filter by, so it's scoped by parent + custom instead.
+		"doctype": "DocType Link",
+		"filters": [["parent", "=", "Supplier"], ["custom", "=", 1]]
 	},
 ]
 
@@ -82,8 +73,11 @@ fixtures = [
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
-# doctype_js = {"doctype" : "public/js/doctype.js"}
-# doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
+# Supplier is a core ERPNext doctype this app doesn't own — these two hooks
+# are Frappe's own sanctioned way to add extra client-side behavior to a
+# doctype from another app, without touching ERPNext's own source files.
+doctype_js = {"Supplier": "public/js/supplier.js"}
+doctype_list_js = {"Supplier": "public/js/supplier_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
@@ -102,6 +96,51 @@ fixtures = [
 # role_home_page = {
 # 	"Role": "home_page"
 # }
+
+# Vendor-facing Supplier Portal pages — Vendor Satisfaction Survey / Vendor
+# Support Ticket, deliberately built as plain www/ pages (not Web Forms) so
+# they live inside the normal portal (sidebar-visible, alongside a vendor's
+# other records) rather than as a standalone form. Both doctypes' lists are
+# hand-built (www/vss_list, www/vst_list) for a proper server-rendered table
+# with a Status column — Frappe's generic doctype-name list route is
+# AJAX-driven and renders no data on first load, which is why it looked
+# broken/empty. Satisfaction Survey has no vendor-facing create page — a
+# Supplier can only view/fill/submit a survey the scheduler or an internal
+# user already created (no "create" permission on the doctype at all for
+# that role). "new" and "<name>" detail/edit pages are hand-built (Frappe
+# has no generic create/edit page for a plain doctype outside Web Form),
+# mirroring the same pattern ERPNext's own Request for Quotation portal page
+# uses.
+website_route_rules = [
+	{"from_route": "/vendor-satisfaction-surveys", "to_route": "vss_list"},
+	{
+		"from_route": "/vendor-satisfaction-surveys/<path:name>",
+		"to_route": "vss_detail",
+		"defaults": {"doctype": "Vendor Satisfaction Survey"},
+	},
+	{"from_route": "/vendor-support-tickets", "to_route": "vst_list"},
+	{"from_route": "/vendor-support-tickets/new", "to_route": "vst_new"},
+	{
+		"from_route": "/vendor-support-tickets/<path:name>",
+		"to_route": "vst_detail",
+		"defaults": {"doctype": "Vendor Support Ticket"},
+	},
+]
+
+standard_portal_menu_items = [
+	{
+		"title": "Satisfaction Surveys",
+		"route": "/vendor-satisfaction-surveys",
+		"reference_doctype": "Vendor Satisfaction Survey",
+		"role": "Supplier",
+	},
+	{
+		"title": "Support Tickets",
+		"route": "/vendor-support-tickets",
+		"reference_doctype": "Vendor Support Ticket",
+		"role": "Supplier",
+	},
+]
 
 # Generators
 # ----------
@@ -130,6 +169,7 @@ after_install = "vendor_lifecycle.vendor_lifecycle.install.after_install"
 # Workspace Sidebar / Desktop Icon in sync even after later edits to those
 # files (Frappe doesn't auto-import them the way it does other standard
 # doctypes). See vendor_lifecycle/install.py for why this is needed.
+before_migrate = "vendor_lifecycle.vendor_lifecycle.install.before_migrate"
 after_migrate = "vendor_lifecycle.vendor_lifecycle.install.after_migrate"
 
 # Uninstallation
@@ -203,6 +243,16 @@ doc_events = {
 	"Payment Entry": {
 		"validate": "vendor_lifecycle.vendor_lifecycle.deboarding_guard.warn_disabled_supplier_on_transaction",
 	},
+	"Supplier": {
+		"validate": "vendor_lifecycle.vendor_lifecycle.vendor_creation.validate_supplier_vendor_kyc",
+		"onload": "vendor_lifecycle.vendor_lifecycle.vendor_creation.set_supplier_disable_reason_onload",
+	},
+	"Communication": {
+		"on_update": [
+			"vendor_lifecycle.vendor_lifecycle.signoff_reply.handle_signoff_reply",
+			"vendor_lifecycle.vendor_lifecycle.checklist_clearance_reply.handle_checklist_clearance_reply",
+		],
+	},
 }
 
 # Scheduled Tasks
@@ -211,7 +261,19 @@ doc_events = {
 scheduler_events = {
 	"daily": [
 		"vendor_lifecycle.vendor_lifecycle.tasks.create_pending_satisfaction_surveys",
+		"vendor_lifecycle.vendor_lifecycle.tasks.send_satisfaction_survey_reminders",
+		"vendor_lifecycle.vendor_lifecycle.tasks.send_support_ticket_escalations",
+		"vendor_lifecycle.vendor_lifecycle.tasks.send_checklist_assignment_reminders",
+		"vendor_lifecycle.vendor_lifecycle.tasks.send_deboarding_checklist_followups",
+		"vendor_lifecycle.vendor_lifecycle.tasks.send_signoff_followups",
 	],
+	# Needs a specific time (2 AM), unlike the "daily" bucket above which
+	# just runs sometime during Frappe's own daily scheduler window.
+	"cron": {
+		"0 2 * * *": [
+			"vendor_lifecycle.vendor_lifecycle.tasks.auto_disable_expired_temporary_enables",
+		],
+	},
 }
 
 # Testing

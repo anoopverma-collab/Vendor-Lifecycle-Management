@@ -8,7 +8,7 @@
  "apply_document_permissions": 0,
  "breadcrumbs": "",
  "button_label": "Submit",
- "client_script": "",
+ "client_script": "frappe.web_form.on(\"establishment_date\", (field, value) => {\n\tif (!value) return;\n\tconst days = frappe.datetime.get_day_diff(frappe.datetime.now_date(), value);\n\tif (days < 0) {\n\t\tfrappe.msgprint(__(\"Establishment Date cannot be in the future.\"));\n\t\tfrappe.web_form.set_value(\"establishment_date\", \"\");\n\t\treturn;\n\t}\n\tconst years = days / 365.25;\n\tfrappe.web_form.set_value(\"years_in_business\", Math.max(0, Math.round(years * 100) / 100));\n});\n\n// Web Forms turn every Link field into a static Autocomplete at render\n// time, pre-loaded with EVERY record of the target doctype (frappe's own\n// process_link_field()/get_link_options() \u2014 there's no live, server-side,\n// country-scoped query on a web form, unlike the desk forms). So filtering\n// by Country happens client-side instead, against the already-loaded full\n// list, via the Autocomplete control's own set_data().\nfrappe.web_form.on(\"country\", (field, value) => {\n\tfrappe.web_form.set_value(\"state_master\", \"\");\n\tconst state_field = frappe.web_form.get_field(\"state_master\");\n\tif (!state_field) return;\n\n\tif (!frappe.web_form._all_states) {\n\t\tfrappe.web_form._all_states = (state_field.df.options || \"\").split(\"\\n\").filter(Boolean);\n\t}\n\tconst filtered = value ? frappe.web_form._all_states.filter((s) => s.endsWith(`(${value})`)) : [];\n\tstate_field.set_data(filtered);\n\n\tif (value && !filtered.length) {\n\t\tfrappe.msgprint({\n\t\t\ttitle: __(\"No States Listed Yet\"),\n\t\t\tindicator: \"orange\",\n\t\t\tmessage: __(\"No states are listed yet for {0}.\", [frappe.bold(value)]),\n\t\t});\n\t}\n});\n\nfrappe.web_form.on(\"state_master\", (field, value) => {\n\tif (!value) return;\n\tfrappe.db.get_value(\"State\", value, \"state_name\").then((r) => {\n\t\tif (r.message && r.message.state_name) {\n\t\t\tfrappe.web_form.set_value(\"state\", r.message.state_name);\n\t\t}\n\t});\n});\n",
  "creation": "2026-08-03 12:40:30.491883",
  "doc_type": "Vendor Onboarding Request",
  "docstatus": 0,
@@ -59,7 +59,7 @@
   {
    "fieldname": "section_break_contact",
    "fieldtype": "Section Break",
-   "label": "Contact"
+   "label": "Contact & Address"
   },
   {
    "fieldname": "contact_person",
@@ -86,35 +86,54 @@
    "label": "Website"
   },
   {
-   "fieldname": "section_break_address",
-   "fieldtype": "Section Break",
-   "label": "Address"
-  },
-  {
-   "fieldname": "business_address",
-   "fieldtype": "Small Text",
-   "label": "Business Address"
+   "fieldname": "column_break_contact",
+   "fieldtype": "Column Break"
   },
   {
    "fieldname": "city",
    "fieldtype": "Data",
-   "label": "City"
+   "label": "City",
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.country",
+   "fieldname": "state_master",
+   "fieldtype": "Link",
+   "label": "State",
+   "options": "State"
   },
   {
    "fieldname": "state",
    "fieldtype": "Data",
+   "hidden": 1,
    "label": "State"
+  },
+  {
+   "fieldname": "address_line_1",
+   "fieldtype": "Data",
+   "label": "Address Line 1"
+  },
+  {
+   "fieldname": "address_line_2",
+   "fieldtype": "Data",
+   "label": "Address Line 2"
+  },
+  {
+   "fieldname": "column_break_contact_2",
+   "fieldtype": "Column Break"
   },
   {
    "fieldname": "country",
    "fieldtype": "Link",
    "label": "Country",
-   "options": "Country"
+   "options": "Country",
+   "reqd": 1
   },
   {
    "fieldname": "pincode",
    "fieldtype": "Data",
-   "label": "Postal / ZIP Code"
+   "label": "Postal / ZIP Code",
+   "reqd": 1
   },
   {
    "fieldname": "tax_id",
@@ -131,7 +150,7 @@
   {
    "fieldname": "section_break_business",
    "fieldtype": "Section Break",
-   "label": "Business Details"
+   "label": "About Your Business"
   },
   {
    "depends_on": "eval:!doc.business_type",
@@ -140,9 +159,9 @@
    "options": "<p class=\"text-muted\">Kindly select Business Type above to fill Business Details.</p>"
   },
   {
-   "fieldname": "estimated_monthly_capacity",
+   "fieldname": "estimated_monthly_production_capacity",
    "fieldtype": "Int",
-   "label": "Estimated Monthly Capacity",
+   "label": "Estimated Monthly Production Capacity",
    "depends_on": "eval:doc.business_type",
    "mandatory_depends_on": "eval:doc.business_type"
   },
@@ -154,11 +173,86 @@
    "mandatory_depends_on": "eval:doc.business_type"
   },
   {
-   "fieldname": "years_in_business",
+   "description": "Used to auto-calculate Years in Business below — you can still edit that field by hand afterward.",
+   "fieldname": "establishment_date",
+   "fieldtype": "Date",
+   "label": "Establishment Date",
+   "depends_on": "eval:doc.business_type"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Trader'",
+   "fieldname": "brands_distributed",
+   "fieldtype": "Small Text",
+   "label": "Brands / Sources You Distribute",
+   "mandatory_depends_on": "eval:doc.business_type=='Trader'"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Service Provider'",
+   "fieldname": "service_types_offered",
+   "fieldtype": "Small Text",
+   "label": "Types of Services Offered",
+   "mandatory_depends_on": "eval:doc.business_type=='Service Provider'"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Contractor / Job Worker'",
+   "fieldname": "scope_of_work",
+   "fieldtype": "Small Text",
+   "label": "Scope of Work",
+   "mandatory_depends_on": "eval:doc.business_type=='Contractor / Job Worker'"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Logistics / Transporter'",
+   "fieldname": "fleet_size",
    "fieldtype": "Int",
+   "label": "Fleet Size",
+   "mandatory_depends_on": "eval:doc.business_type=='Logistics / Transporter'"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Freelancer / Consultant'",
+   "fieldname": "areas_of_expertise",
+   "fieldtype": "Small Text",
+   "label": "Areas of Expertise",
+   "mandatory_depends_on": "eval:doc.business_type=='Freelancer / Consultant'"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Raw Material Supplier'",
+   "fieldname": "materials_supplied",
+   "fieldtype": "Small Text",
+   "label": "Materials Supplied",
+   "mandatory_depends_on": "eval:doc.business_type=='Raw Material Supplier'"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Equipment / Machinery Supplier'",
+   "fieldname": "equipment_types",
+   "fieldtype": "Small Text",
+   "label": "Equipment / Machinery Types",
+   "mandatory_depends_on": "eval:doc.business_type=='Equipment / Machinery Supplier'"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Technology / Software Vendor'",
+   "fieldname": "product_or_platform_name",
+   "fieldtype": "Data",
+   "label": "Product / Platform Name",
+   "mandatory_depends_on": "eval:doc.business_type=='Technology / Software Vendor'"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Facility / Maintenance Services'",
+   "fieldname": "services_covered",
+   "fieldtype": "Small Text",
+   "label": "Services Covered",
+   "mandatory_depends_on": "eval:doc.business_type=='Facility / Maintenance Services'"
+  },
+  {
+   "fieldname": "column_break_business",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "years_in_business",
+   "fieldtype": "Float",
    "label": "Years in Business",
    "depends_on": "eval:doc.business_type",
-   "mandatory_depends_on": "eval:doc.business_type"
+   "mandatory_depends_on": "eval:doc.business_type",
+   "precision": "2"
   },
   {
    "fieldname": "team_size",
@@ -189,32 +283,11 @@
    "mandatory_depends_on": "eval:doc.referral_source=='Referral from Existing Vendor'"
   },
   {
-   "depends_on": "eval:doc.business_type=='Manufacturer'",
-   "fieldname": "equipment_count",
-   "fieldtype": "Int",
-   "label": "Total Machines / Production Equipment",
-   "mandatory_depends_on": "eval:doc.business_type=='Manufacturer'"
-  },
-  {
-   "depends_on": "eval:doc.business_type=='Trader'",
-   "fieldname": "brands_distributed",
-   "fieldtype": "Small Text",
-   "label": "Brands / Sources You Distribute",
-   "mandatory_depends_on": "eval:doc.business_type=='Trader'"
-  },
-  {
    "depends_on": "eval:doc.business_type=='Trader'",
    "fieldname": "minimum_order_quantity",
    "fieldtype": "Data",
    "label": "Minimum Order Quantity",
    "mandatory_depends_on": "eval:doc.business_type=='Trader'"
-  },
-  {
-   "depends_on": "eval:doc.business_type=='Service Provider'",
-   "fieldname": "service_types_offered",
-   "fieldtype": "Small Text",
-   "label": "Types of Services Offered",
-   "mandatory_depends_on": "eval:doc.business_type=='Service Provider'"
   },
   {
    "depends_on": "eval:doc.business_type=='Service Provider'",
@@ -225,25 +298,11 @@
   },
   {
    "depends_on": "eval:doc.business_type=='Contractor / Job Worker'",
-   "fieldname": "scope_of_work",
-   "fieldtype": "Small Text",
-   "label": "Scope of Work",
-   "mandatory_depends_on": "eval:doc.business_type=='Contractor / Job Worker'"
-  },
-  {
-   "depends_on": "eval:doc.business_type=='Contractor / Job Worker'",
    "fieldname": "equipment_provided_by",
    "fieldtype": "Select",
    "label": "Equipment Provided By",
    "options": "\nVendor\nUs\nBoth",
    "mandatory_depends_on": "eval:doc.business_type=='Contractor / Job Worker'"
-  },
-  {
-   "depends_on": "eval:doc.business_type=='Logistics / Transporter'",
-   "fieldname": "fleet_size",
-   "fieldtype": "Int",
-   "label": "Fleet Size",
-   "mandatory_depends_on": "eval:doc.business_type=='Logistics / Transporter'"
   },
   {
    "depends_on": "eval:doc.business_type=='Logistics / Transporter' || doc.business_type=='Facility / Maintenance Services'",
@@ -254,24 +313,10 @@
   },
   {
    "depends_on": "eval:doc.business_type=='Freelancer / Consultant'",
-   "fieldname": "areas_of_expertise",
-   "fieldtype": "Small Text",
-   "label": "Areas of Expertise",
-   "mandatory_depends_on": "eval:doc.business_type=='Freelancer / Consultant'"
-  },
-  {
-   "depends_on": "eval:doc.business_type=='Freelancer / Consultant'",
    "fieldname": "availability_hours_per_week",
    "fieldtype": "Int",
    "label": "Availability (Hours/Week)",
    "mandatory_depends_on": "eval:doc.business_type=='Freelancer / Consultant'"
-  },
-  {
-   "depends_on": "eval:doc.business_type=='Raw Material Supplier'",
-   "fieldname": "materials_supplied",
-   "fieldtype": "Small Text",
-   "label": "Materials Supplied",
-   "mandatory_depends_on": "eval:doc.business_type=='Raw Material Supplier'"
   },
   {
    "depends_on": "eval:doc.business_type=='Raw Material Supplier'",
@@ -282,23 +327,9 @@
   },
   {
    "depends_on": "eval:doc.business_type=='Equipment / Machinery Supplier'",
-   "fieldname": "equipment_types",
-   "fieldtype": "Small Text",
-   "label": "Equipment / Machinery Types",
-   "mandatory_depends_on": "eval:doc.business_type=='Equipment / Machinery Supplier'"
-  },
-  {
-   "depends_on": "eval:doc.business_type=='Equipment / Machinery Supplier'",
    "fieldname": "warranty_support_offered",
    "fieldtype": "Check",
    "label": "Warranty / After-Sales Support Offered"
-  },
-  {
-   "depends_on": "eval:doc.business_type=='Technology / Software Vendor'",
-   "fieldname": "product_or_platform_name",
-   "fieldtype": "Data",
-   "label": "Product / Platform Name",
-   "mandatory_depends_on": "eval:doc.business_type=='Technology / Software Vendor'"
   },
   {
    "depends_on": "eval:doc.business_type=='Technology / Software Vendor'",
@@ -306,13 +337,6 @@
    "fieldtype": "Data",
    "label": "Support / SLA Terms",
    "mandatory_depends_on": "eval:doc.business_type=='Technology / Software Vendor'"
-  },
-  {
-   "depends_on": "eval:doc.business_type=='Facility / Maintenance Services'",
-   "fieldname": "services_covered",
-   "fieldtype": "Small Text",
-   "label": "Services Covered",
-   "mandatory_depends_on": "eval:doc.business_type=='Facility / Maintenance Services'"
   },
   {
    "fieldname": "section_break_profile",
@@ -326,16 +350,25 @@
    "label": "Business / Capability Profile"
   },
   {
+   "fieldname": "column_break_profile",
+   "fieldtype": "Column Break"
+  },
+  {
    "description": "Maximum file size: 10 MB.",
    "fieldname": "catalogue_attachment",
    "fieldtype": "Attach",
    "label": "Products / Services Catalogue"
   },
   {
-   "fieldname": "description",
-   "fieldtype": "Small Text",
-   "label": "Description of Products / Services Offered"
+   "fieldname": "column_break_profile_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Maximum file size: 10 MB.",
+   "fieldname": "additional_attachment",
+   "fieldtype": "Attach",
+   "label": "Additional Attachment"
   }
  ],
- "custom_css": ""
+ "custom_css": ".web-form-header .web-form-title h1 {\n\tfont-size: var(--text-2xl);\n}\n\n.web-form-introduction {\n\tfont-size: var(--text-sm);\n\tcolor: var(--text-muted);\n}\n\n.web-form .web-form-wrapper .form-section {\n\tpadding: 0.5rem 0 0.75rem;\n\tmargin-bottom: 0.5rem;\n\tborder-bottom: 1px solid var(--dark-border-color);\n}\n\n.web-form .web-form-wrapper .form-section:last-of-type {\n\tborder-bottom: none;\n}\n\n.web-form .web-form-wrapper .form-section .section-head {\n\tfont-size: var(--text-md);\n\tfont-weight: 600;\n\tpadding: 0.25rem 0;\n\tmargin-bottom: 0.25rem;\n}\n\n.web-form .web-form-wrapper .form-column .form-group {\n\tmargin-bottom: 0.5rem;\n}"
 }

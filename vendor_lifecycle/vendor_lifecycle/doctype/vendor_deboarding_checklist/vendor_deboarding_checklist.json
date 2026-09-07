@@ -7,11 +7,26 @@
  "engine": "InnoDB",
  "field_order": [
   "deboarding_request",
+  "supplier",
   "checklist_template",
-  "responsible_person",
+  "column_break_top",
   "completed_on",
+  "company",
+  "additional_email",
   "section_break_items",
-  "checklist_items"
+  "checklist_items",
+  "section_break_clearance",
+  "no_clearance_certificate",
+  "clearance_attachment",
+  "clearance_exception_reason",
+  "column_break_clearance",
+  "signed_clearance_certificate",
+  "last_reminder_sent",
+  "is_temporarily_enabled",
+  "temporarily_enabled_on",
+  "amended_from",
+  "open_transactions_tab",
+  "open_transactions_detail"
  ],
  "fields": [
   {
@@ -20,25 +35,49 @@
    "in_list_view": 1,
    "label": "Deboarding Request",
    "options": "Vendor Deboarding Request",
+   "read_only": 1,
    "reqd": 1
+  },
+  {
+   "fetch_from": "deboarding_request.vendor",
+   "fieldname": "supplier",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Supplier",
+   "options": "Supplier",
+   "read_only": 1
   },
   {
    "fieldname": "checklist_template",
    "fieldtype": "Link",
    "label": "Checklist Template",
-   "options": "Vendor Deboarding Checklist Template"
+   "options": "Vendor Deboarding Checklist Template",
+   "read_only": 1,
+   "reqd": 1
   },
   {
-   "fieldname": "responsible_person",
-   "fieldtype": "Link",
-   "label": "Responsible Person",
-   "options": "User"
+   "fieldname": "column_break_top",
+   "fieldtype": "Column Break"
   },
   {
    "fieldname": "completed_on",
    "fieldtype": "Date",
    "label": "Completed On",
    "read_only": 1
+  },
+  {
+   "description": "Overrides Global Defaults for the clearance email's Company Name / GSTIN.",
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company"
+  },
+  {
+   "description": "Extra recipient for the clearance certificate email.",
+   "fieldname": "additional_email",
+   "fieldtype": "Data",
+   "label": "Additional Supplier Email",
+   "options": "Email"
   },
   {
    "fieldname": "section_break_items",
@@ -50,16 +89,97 @@
    "fieldtype": "Table",
    "label": "Checklist Items",
    "options": "Vendor Deboarding Checklist Item"
+  },
+  {
+   "fieldname": "section_break_clearance",
+   "fieldtype": "Section Break",
+   "label": "Clearance"
+  },
+  {
+   "default": "0",
+   "fieldname": "no_clearance_certificate",
+   "fieldtype": "Check",
+   "label": "No Clearance Certificate Available"
+  },
+  {
+   "depends_on": "eval:!doc.no_clearance_certificate",
+   "description": "Attach the NDC or clearance certificate.",
+   "fieldname": "clearance_attachment",
+   "fieldtype": "Attach",
+   "label": "Clearance Certificate"
+  },
+  {
+   "depends_on": "eval:doc.no_clearance_certificate",
+   "description": "Required when there's no Clearance Certificate. Only enforced at submit — not on a plain save.",
+   "fieldname": "clearance_exception_reason",
+   "fieldtype": "Small Text",
+   "label": "Reason Clearance Certificate is Missing"
+  },
+  {
+   "fieldname": "column_break_clearance",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:!doc.no_clearance_certificate",
+   "description": "The vendor's signed copy — attached automatically once received by email reply, or can be attached manually.",
+   "fieldname": "signed_clearance_certificate",
+   "fieldtype": "Attach",
+   "label": "Signed Clearance Certificate"
+  },
+  {
+   "fieldname": "last_reminder_sent",
+   "fieldtype": "Date",
+   "label": "Last Reminder Sent",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_temporarily_enabled",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Is Temporarily Enabled",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "temporarily_enabled_on",
+   "fieldtype": "Datetime",
+   "hidden": 1,
+   "label": "Temporarily Enabled On",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Vendor Deboarding Checklist",
+   "print_hide": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "open_transactions_tab",
+   "fieldtype": "Tab Break",
+   "label": "Open Transactions"
+  },
+  {
+   "fieldname": "open_transactions_detail",
+   "fieldtype": "HTML",
+   "label": "Open Transactions"
   }
  ],
+ "is_submittable": 1,
  "links": [],
- "modified": "2026-08-03 13:08:45.433369",
+ "modified": "2026-09-05 17:00:00.000000",
  "modified_by": "Administrator",
  "module": "Vendor Lifecycle",
  "name": "Vendor Deboarding Checklist",
  "owner": "Administrator",
  "permissions": [
   {
+   "cancel": 1,
    "create": 1,
    "delete": 1,
    "email": 1,
@@ -69,9 +189,11 @@
    "report": 1,
    "role": "System Manager",
    "share": 1,
+   "submit": 1,
    "write": 1
   },
   {
+   "cancel": 1,
    "create": 1,
    "delete": 1,
    "email": 1,
@@ -81,6 +203,7 @@
    "report": 1,
    "role": "Vendor Lifecycle Manager",
    "share": 1,
+   "submit": 1,
    "write": 1
   },
   {

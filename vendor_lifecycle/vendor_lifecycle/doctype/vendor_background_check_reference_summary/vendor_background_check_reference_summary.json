@@ -1,0 +1,74 @@
+{
+ "actions": [],
+ "creation": "2026-08-15 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 0,
+ "engine": "InnoDB",
+ "field_order": [
+  "reference",
+  "reference_name",
+  "reference_contact",
+  "result_method_resolved",
+  "average_rating",
+  "outcome"
+ ],
+ "fields": [
+  {
+   "fieldname": "reference",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Reference ID",
+   "options": "Vendor Background Check Reference",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reference_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Reference Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reference_contact",
+   "fieldtype": "Phone",
+   "in_list_view": 1,
+   "label": "Contact Number",
+   "read_only": 1
+  },
+  {
+   "description": "Which Reference Result Method this Reference's own Result/Average Rating was computed with — a Rating Criteria Template can override the Settings-level default per Reference, so this can differ from row to row.",
+   "fieldname": "result_method_resolved",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Result Method",
+   "options": "\nAverage\nEach Criteria Must Pass\nMajority of Criteria",
+   "read_only": 1
+  },
+  {
+   "fieldname": "average_rating",
+   "fieldtype": "Float",
+   "label": "Average Rating",
+   "precision": "1",
+   "read_only": 1
+  },
+  {
+   "fieldname": "outcome",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Result",
+   "options": "Needs Review\nPassed\nFailed",
+   "read_only": 1
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-09-03 19:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "Vendor Background Check Reference Summary",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

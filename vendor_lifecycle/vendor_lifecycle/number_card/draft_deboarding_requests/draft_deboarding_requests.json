@@ -1,0 +1,21 @@
+{
+ "creation": "2026-09-06 00:00:00.000000",
+ "docstatus": 0,
+ "doctype": "Number Card",
+ "document_type": "Vendor Deboarding Request",
+ "dynamic_filters_json": "[]",
+ "filters_json": "[[\"Vendor Deboarding Request\",\"docstatus\",\"=\",0],[\"Vendor Deboarding Request\",\"status\",\"!=\",\"Rejected\"]]",
+ "function": "Count",
+ "idx": 0,
+ "is_public": 1,
+ "is_standard": 1,
+ "label": "Draft Deboarding Requests",
+ "modified": "2026-09-06 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "Draft Deboarding Requests",
+ "owner": "Administrator",
+ "show_percentage_stats": 0,
+ "stats_time_interval": "Monthly",
+ "type": "Document Type"
+}

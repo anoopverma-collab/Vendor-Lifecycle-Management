@@ -1,0 +1,59 @@
+{
+ "actions": [],
+ "creation": "2026-08-19 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "check_type",
+  "attachment_mandatory",
+  "source_mandatory",
+  "reference_mandatory"
+ ],
+ "fields": [
+  {
+   "fieldname": "check_type",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Check Type",
+   "link_filters": "[[\"Compliance Check Type\",\"disabled\",\"=\",0]]",
+   "options": "Compliance Check Type",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "description": "If ticked, this check's Supporting Document must be attached before the Background Check can be submitted.",
+   "fieldname": "attachment_mandatory",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Attachment Mandatory"
+  },
+  {
+   "default": "0",
+   "description": "If ticked, this check's Source must be filled in before the Background Check can be submitted.",
+   "fieldname": "source_mandatory",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Source Mandatory"
+  },
+  {
+   "default": "0",
+   "description": "If ticked, this check's Reference / Value must be filled in before the Background Check can be submitted.",
+   "fieldname": "reference_mandatory",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Reference Mandatory"
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-19 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "Compliance Check Template Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

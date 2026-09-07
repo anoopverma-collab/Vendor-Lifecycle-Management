@@ -1,7 +1,7 @@
 {
  "app": "vendor_lifecycle",
  "charts": [],
- "content": "[{\"id\":\"vlHeader1\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Vendor Lifecycle</b></span>\",\"col\":12}},{\"id\":\"vlShortcut1\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Vendor Onboarding Request\",\"col\":4}},{\"id\":\"vlShortcut2\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Vendor Deboarding Request\",\"col\":4}},{\"id\":\"vlShortcut3\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Vendor Lifecycle Settings\",\"col\":4}},{\"id\":\"vlSpacer1\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"vlHeader2\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Onboarding &amp; Verification</b></span>\",\"col\":12}},{\"id\":\"vlCardOnboarding\",\"type\":\"card\",\"data\":{\"card_name\":\"Onboarding\",\"col\":4}},{\"id\":\"vlCardVerification\",\"type\":\"card\",\"data\":{\"card_name\":\"Verification\",\"col\":4}},{\"id\":\"vlCardActivation\",\"type\":\"card\",\"data\":{\"card_name\":\"Activation\",\"col\":4}},{\"id\":\"vlHeader3\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Deboarding &amp; Engagement</b></span>\",\"col\":12}},{\"id\":\"vlCardDeboarding\",\"type\":\"card\",\"data\":{\"card_name\":\"Deboarding\",\"col\":4}},{\"id\":\"vlCardEngagement\",\"type\":\"card\",\"data\":{\"card_name\":\"Ongoing Engagement\",\"col\":4}},{\"id\":\"vlCardSettings\",\"type\":\"card\",\"data\":{\"card_name\":\"Masters & Settings\",\"col\":4}}]",
+ "content": "[{\"id\":\"vlHeader1\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Vendor Lifecycle</b></span>\",\"col\":12}},{\"id\":\"vlShortcut1\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Vendor Onboarding Request\",\"col\":4}},{\"id\":\"vlShortcut2\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Vendor Deboarding Request\",\"col\":4}},{\"id\":\"vlShortcutOnboardingDashboard\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Vendor Onboarding Dashboard\",\"col\":4}},{\"id\":\"vlShortcutEngagementDashboard\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Vendor Engagement Dashboard\",\"col\":4}},{\"id\":\"vlShortcutDashboard\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Vendor Deboarding Dashboard\",\"col\":4}},{\"id\":\"vlShortcut3\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Vendor Lifecycle Settings\",\"col\":4}},{\"id\":\"vlSpacer1\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"vlHeader2\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Onboarding &amp; Verification</b></span>\",\"col\":12}},{\"id\":\"vlCardOnboarding\",\"type\":\"card\",\"data\":{\"card_name\":\"Onboarding\",\"col\":4}},{\"id\":\"vlCardVerification\",\"type\":\"card\",\"data\":{\"card_name\":\"Verification\",\"col\":4}},{\"id\":\"vlCardActivation\",\"type\":\"card\",\"data\":{\"card_name\":\"Activation\",\"col\":4}},{\"id\":\"vlHeader3\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Deboarding &amp; Engagement</b></span>\",\"col\":12}},{\"id\":\"vlCardDeboarding\",\"type\":\"card\",\"data\":{\"card_name\":\"Deboarding\",\"col\":4}},{\"id\":\"vlCardEngagement\",\"type\":\"card\",\"data\":{\"card_name\":\"Ongoing Engagement\",\"col\":4}},{\"id\":\"vlCardSettings\",\"type\":\"card\",\"data\":{\"card_name\":\"Masters & Settings\",\"col\":4}}]",
  "creation": "2026-08-03 14:40:06.931794",
  "custom_blocks": [],
  "docstatus": 0,
@@ -55,10 +55,32 @@
    "dependencies": "Vendor KYC",
    "hidden": 0,
    "is_query_report": 0,
+   "label": "Vendor Background Check",
+   "link_count": 0,
+   "link_to": "Vendor Background Check",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "Vendor KYC",
+   "hidden": 0,
+   "is_query_report": 0,
    "label": "Vendor Compliance Audit",
    "link_count": 0,
    "link_to": "Vendor Compliance Audit",
    "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Vendors Due for Re-Audit",
+   "link_count": 0,
+   "link_to": "Vendors Due for Re-Audit",
+   "link_type": "Report",
    "onboard": 0,
    "type": "Link"
   },
@@ -69,17 +91,6 @@
    "label": "Vendor Sampling Evaluation",
    "link_count": 0,
    "link_to": "Vendor Sampling Evaluation",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "dependencies": "Vendor KYC",
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Vendor Reference Check",
-   "link_count": 0,
-   "link_to": "Vendor Reference Check",
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
@@ -100,6 +111,17 @@
    "link_count": 0,
    "link_to": "Vendor Sign Off",
    "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Vendor Onboarding Pipeline",
+   "link_count": 0,
+   "link_to": "Vendor Onboarding Pipeline",
+   "link_type": "Report",
    "onboard": 0,
    "type": "Link"
   },
@@ -134,6 +156,17 @@
    "type": "Link"
   },
   {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Vendor Deboarding Pipeline",
+   "link_count": 0,
+   "link_to": "Vendor Deboarding Pipeline",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
    "hidden": 0,
    "is_query_report": 0,
    "label": "Ongoing Engagement",
@@ -160,6 +193,17 @@
    "link_count": 0,
    "link_to": "Vendor Support Ticket",
    "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Vendor Support Ticket Aging",
+   "link_count": 0,
+   "link_to": "Vendor Support Ticket Aging",
+   "link_type": "Report",
    "onboard": 0,
    "type": "Link"
   },
@@ -197,9 +241,108 @@
    "dependencies": "",
    "hidden": 0,
    "is_query_report": 0,
+   "label": "Rating Criteria Template",
+   "link_count": 0,
+   "link_to": "Rating Criteria Template",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Satisfaction Rating Template",
+   "link_count": 0,
+   "link_to": "Satisfaction Rating Template",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
    "label": "Audit Checklist Template",
    "link_count": 0,
    "link_to": "Audit Checklist Template",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Licenses and Permits Template",
+   "link_count": 0,
+   "link_to": "Licenses and Permits Template",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Insurance Template",
+   "link_count": 0,
+   "link_to": "Insurance Template",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Sampling Evaluation Template",
+   "link_count": 0,
+   "link_to": "Sampling Evaluation Template",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "License Type",
+   "link_count": 0,
+   "link_to": "License Type",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Issuing Authority",
+   "link_count": 0,
+   "link_to": "Issuing Authority",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Insurance Type",
+   "link_count": 0,
+   "link_to": "Insurance Type",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Insurer",
+   "link_count": 0,
+   "link_to": "Insurer",
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
@@ -219,15 +362,59 @@
    "dependencies": "",
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Deboarding Reason",
+   "label": "Compliance Check Type",
    "link_count": 0,
-   "link_to": "Deboarding Reason",
+   "link_to": "Compliance Check Type",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Compliance Check Source",
+   "link_count": 0,
+   "link_to": "Compliance Check Source",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Compliance Check Template",
+   "link_count": 0,
+   "link_to": "Compliance Check Template",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "State",
+   "link_count": 0,
+   "link_to": "State",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Coverage Type",
+   "link_count": 0,
+   "link_to": "Coverage Type",
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
   }
  ],
- "modified": "2026-08-03 14:40:06.931794",
+ "modified": "2026-09-07 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Vendor Lifecycle",
  "name": "Vendor Lifecycle",
@@ -251,6 +438,21 @@
    "link_to": "Vendor Deboarding Request",
    "type": "DocType",
    "doc_view": "List"
+  },
+  {
+   "label": "Vendor Onboarding Dashboard",
+   "link_to": "Vendor Onboarding",
+   "type": "Dashboard"
+  },
+  {
+   "label": "Vendor Engagement Dashboard",
+   "link_to": "Vendor Engagement",
+   "type": "Dashboard"
+  },
+  {
+   "label": "Vendor Deboarding Dashboard",
+   "link_to": "Vendor Deboarding",
+   "type": "Dashboard"
   },
   {
    "label": "Vendor Lifecycle Settings",

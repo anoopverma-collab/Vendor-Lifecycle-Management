@@ -5,42 +5,51 @@
  "document_type": "Other",
  "engine": "InnoDB",
  "field_order": [
+  "onboarding_tab",
   "onboarding_request_section",
   "duplicate_request_handling",
-  "request_edit_override_role",
-  "vendor_kyc_section",
-  "require_onboarding_request_for_kyc",
   "duplicate_kyc_handling",
-  "create_vendor_at",
+  "restrict_supplier_creation_to_vendor_lifecycle",
+  "column_break_vendor_kyc",
+  "require_onboarding_request_for_kyc",
   "require_complete_bank_details",
   "require_complete_address_details",
   "stages_section",
-  "enforce_sequential_stages",
+  "background_check_mandatory",
+  "reference_result_method",
+  "background_check_result_method",
   "audit_mandatory",
-  "sampling_mandatory",
-  "reference_check_mandatory",
-  "minimum_average_rating",
-  "column_break_stages",
+  "compliance_audit_validity_months",
+  "column_break_reference_minimum_rating",
+  "reference_minimum_average_rating",
+  "sampling_mandatory_overrides",
+  "deboarding_engagement_tab",
   "deboarding_section",
-  "disable_timing",
-  "column_break_deboarding",
-  "integrations_section",
-  "esign_provider",
-  "column_break_integrations",
-  "deboarding_notification_provider",
+  "default_deboarding_rating_template",
+  "default_checklist_template",
   "engagement_section",
   "enable_satisfaction_surveys",
-  "survey_cadence"
+  "survey_cadence",
+  "default_rating_template",
+  "notifications_tab",
+  "enable_vendor_lifecycle_emails",
+  "vendor_lifecycle_email_account",
+  "vendor_lifecycle_email_always_cc"
  ],
  "fields": [
   {
+   "fieldname": "onboarding_tab",
+   "fieldtype": "Tab Break",
+   "label": "Onboarding"
+  },
+  {
    "fieldname": "onboarding_request_section",
    "fieldtype": "Section Break",
-   "label": "Onboarding Request"
+   "label": "Onboarding Request & KYC"
   },
   {
    "default": "Warn",
-   "description": "What happens when a new Onboarding Request has the same email or contact number as an existing one. \"Warn\" shows a message but still allows saving; \"Block\" prevents saving until it's changed; \"No Check\" disables this check entirely.",
+   "description": "How to handle a duplicate email/contact number on a new Onboarding Request.",
    "fieldname": "duplicate_request_handling",
    "fieldtype": "Select",
    "label": "On Duplicate Onboarding Request",
@@ -48,29 +57,15 @@
    "reqd": 1
   },
   {
-   "default": "System Manager",
-   "description": "Users with this role can still edit an Onboarding Request after it has been processed (moved past Draft). Everyone else is blocked from editing a processed request.",
-   "fieldname": "request_edit_override_role",
-   "fieldtype": "Link",
-   "label": "Role Allowed to Edit Processed Requests",
-   "options": "Role",
-   "reqd": 1
-  },
-  {
-   "fieldname": "vendor_kyc_section",
-   "fieldtype": "Section Break",
-   "label": "Vendor KYC"
-  },
-  {
    "default": "1",
-   "description": "If checked, a Vendor KYC can only be created via the \"Start KYC\" button on an Onboarding Request — direct creation from the Vendor KYC list is blocked. If unchecked, Vendor KYC can also be created directly by picking an Onboarding Request manually.",
+   "description": "Only allow KYC to be started from an Onboarding Request.",
    "fieldname": "require_onboarding_request_for_kyc",
    "fieldtype": "Check",
    "label": "Require Onboarding Request for KYC"
   },
   {
    "default": "Stop",
-   "description": "What happens when a new Vendor KYC references an Onboarding Request that already has another Vendor KYC. \"Stop\" prevents saving; \"Warn\" shows a message but still allows saving; \"Ignore\" disables this check entirely.",
+   "description": "How to handle a KYC reusing an Onboarding Request that already has one.",
    "fieldname": "duplicate_kyc_handling",
    "fieldtype": "Select",
    "label": "On Duplicate KYC for Same Request",
@@ -78,24 +73,26 @@
    "reqd": 1
   },
   {
-   "default": "Vendor KYC",
-   "description": "The onboarding stage at whose submission the actual Supplier record gets created. Every earlier stage still runs normally, but its Vendor field stays blank until this stage creates the Supplier — at which point it's backfilled onto every earlier stage document for the same KYC too.",
-   "fieldname": "create_vendor_at",
-   "fieldtype": "Select",
-   "label": "Create Vendor At",
-   "options": "Vendor KYC\nVendor Compliance Audit\nVendor Sampling Evaluation\nVendor Reference Check\nVendor Sign Off",
-   "reqd": 1
+   "default": "0",
+   "description": "Block new Suppliers unless linked to a Vendor KYC.",
+   "fieldname": "restrict_supplier_creation_to_vendor_lifecycle",
+   "fieldtype": "Check",
+   "label": "Restrict Supplier Creation to Vendor Lifecycle"
+  },
+  {
+   "fieldname": "column_break_vendor_kyc",
+   "fieldtype": "Column Break"
   },
   {
    "default": "1",
-   "description": "If checked, filling in any one of Bank, Account No., IFSC/Branch Code, or Account Name on a Vendor KYC requires all four to be filled in.",
+   "description": "Require all four bank fields together, or none.",
    "fieldname": "require_complete_bank_details",
    "fieldtype": "Check",
    "label": "Require Complete Bank Details"
   },
   {
    "default": "1",
-   "description": "If checked, filling in any one of Address, City, State, Country, or Postal Code on a Vendor KYC requires all five to be filled in.",
+   "description": "Require all five address fields together, or none.",
    "fieldname": "require_complete_address_details",
    "fieldtype": "Check",
    "label": "Require Complete Address Details"
@@ -107,43 +104,69 @@
   },
   {
    "default": "1",
-   "description": "If checked, each stage can only be started once the mandatory stage(s) before it have been submitted — KYC, then Compliance Audit, then Sampling Evaluation, then Reference Check, then Sign-off, skipping any stage marked not-mandatory below. If unchecked, stages can be created in any order, including in parallel.",
-   "fieldname": "enforce_sequential_stages",
+   "description": "If unchecked, the Background Check stage can be skipped.",
+   "fieldname": "background_check_mandatory",
    "fieldtype": "Check",
-   "label": "Enforce Sequential Stages"
+   "label": "Background Check Mandatory"
+  },
+  {
+   "default": "Average",
+   "description": "Default rule for combining a Reference's ratings into a pass/fail result.",
+   "fieldname": "reference_result_method",
+   "fieldtype": "Select",
+   "label": "Reference Result Method",
+   "options": "Average\nEach Criteria Must Pass\nMajority of Criteria",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_reference_minimum_rating",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "3",
+   "description": "Fallback pass/fail rating threshold (1–5).",
+   "fieldname": "reference_minimum_average_rating",
+   "fieldtype": "Float",
+   "label": "Minimum Average Rating (Reference)",
+   "non_negative": 1,
+   "precision": "1"
+  },
+  {
+   "default": "Each Reference Must Pass",
+   "description": "Rule for combining all references into one Background Check result.",
+   "fieldname": "background_check_result_method",
+   "fieldtype": "Select",
+   "label": "Background Check Result Method",
+   "options": "Each Reference Must Pass\nMajority of References",
+   "reqd": 1
   },
   {
    "default": "1",
-   "description": "If unchecked, the Compliance Audit stage can be skipped and the vendor can move straight to Sampling.",
+   "description": "If unchecked, Compliance Audit can be skipped.",
    "fieldname": "audit_mandatory",
    "fieldtype": "Check",
    "label": "Compliance Audit Mandatory"
   },
   {
-   "default": "1",
-   "description": "If unchecked, the Sampling & Cost Evaluation stage can be skipped.",
-   "fieldname": "sampling_mandatory",
-   "fieldtype": "Check",
-   "label": "Sampling Evaluation Mandatory"
+   "default": "12",
+   "description": "How many months a Passed audit stays valid.",
+   "fieldname": "compliance_audit_validity_months",
+   "fieldtype": "Int",
+   "label": "Compliance Audit Validity Period (Months)",
+   "non_negative": 1,
+   "reqd": 1
   },
   {
-   "default": "1",
-   "description": "If unchecked, the Reference Check stage can be skipped.",
-   "fieldname": "reference_check_mandatory",
-   "fieldtype": "Check",
-   "label": "Reference Check Mandatory"
+   "description": "Business Types that require Sampling Evaluation.",
+   "fieldname": "sampling_mandatory_overrides",
+   "fieldtype": "Table",
+   "label": "Sampling Mandatory Overrides (by Business Type)",
+   "options": "Sampling Mandatory Override"
   },
   {
-   "default": "3",
-   "description": "Minimum average rating (out of 5) a Vendor Reference Check must reach to be considered \"Passed\". A Rating Criteria Template's own Minimum Average Rating, if set, takes priority over this value.",
-   "fieldname": "minimum_average_rating",
-   "fieldtype": "Float",
-   "label": "Minimum Average Rating (Reference Check)",
-   "non_negative": 1
-  },
-  {
-   "fieldname": "column_break_stages",
-   "fieldtype": "Column Break"
+   "fieldname": "deboarding_engagement_tab",
+   "fieldtype": "Tab Break",
+   "label": "Deboarding & Ongoing Engagement"
   },
   {
    "fieldname": "deboarding_section",
@@ -151,43 +174,21 @@
    "label": "Deboarding"
   },
   {
-   "default": "After Clearance",
-   "description": "Default order for disabling a vendor during deboarding. Can be overridden per vendor with the \"Disable Now\" action on Vendor Deboarding Request.",
-   "fieldname": "disable_timing",
-   "fieldtype": "Select",
-   "label": "Disable Vendor",
-   "options": "After Clearance\nBefore Clearance",
+   "description": "Which Rating Criteria show on a Vendor Deboarding Request.",
+   "fieldname": "default_deboarding_rating_template",
+   "fieldtype": "Link",
+   "label": "Default Deboarding Rating Template",
+   "link_filters": "[[\"Deboarding Rating Template\",\"disabled\",\"=\",0]]",
+   "options": "Deboarding Rating Template",
    "reqd": 1
   },
   {
-   "fieldname": "column_break_deboarding",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "integrations_section",
-   "fieldtype": "Section Break",
-   "label": "Integrations"
-  },
-  {
-   "default": "Manual",
-   "description": "Provider used to request and detect the signed sign-off document. \"Manual\" needs no external account \u2014 an internal user marks it signed by hand.",
-   "fieldname": "esign_provider",
-   "fieldtype": "Select",
-   "label": "E-Sign Provider",
-   "options": "Manual",
-   "reqd": 1
-  },
-  {
-   "fieldname": "column_break_integrations",
-   "fieldtype": "Column Break"
-  },
-  {
-   "default": "Manual",
-   "description": "Provider used to notify the team when a deboarding checklist task completes. \"Manual\" just leaves the checklist item for a person to action.",
-   "fieldname": "deboarding_notification_provider",
-   "fieldtype": "Select",
-   "label": "Deboarding Notification Provider",
-   "options": "Manual",
+   "description": "Which checklist a new Vendor Deboarding Checklist loads by default.",
+   "fieldname": "default_checklist_template",
+   "fieldtype": "Link",
+   "label": "Default Checklist Template",
+   "link_filters": "[[\"Vendor Deboarding Checklist Template\",\"disabled\",\"=\",0]]",
+   "options": "Vendor Deboarding Checklist Template",
    "reqd": 1
   },
   {
@@ -197,7 +198,7 @@
   },
   {
    "default": "1",
-   "description": "If unchecked, no new Vendor Satisfaction Surveys are auto-created for active vendors.",
+   "description": "If unchecked, no new surveys are auto-created.",
    "fieldname": "enable_satisfaction_surveys",
    "fieldtype": "Check",
    "label": "Auto-Create Satisfaction Surveys"
@@ -205,12 +206,50 @@
   {
    "default": "Quarterly",
    "depends_on": "eval:doc.enable_satisfaction_surveys",
-   "description": "How often a new (draft) satisfaction survey is created per active vendor.",
+   "description": "How often a new survey is created per vendor.",
    "fieldname": "survey_cadence",
    "fieldtype": "Select",
    "label": "Survey Cadence",
    "options": "Monthly\nQuarterly\nHalf-Yearly\nYearly",
    "reqd": 1
+  },
+  {
+   "description": "Fallback Rating Criteria for surveys, if the Supplier has none.",
+   "fieldname": "default_rating_template",
+   "fieldtype": "Link",
+   "label": "Default Rating Template",
+   "link_filters": "[[\"Satisfaction Rating Template\",\"disabled\",\"=\",0]]",
+   "options": "Satisfaction Rating Template",
+   "reqd": 1
+  },
+  {
+   "fieldname": "notifications_tab",
+   "fieldtype": "Tab Break",
+   "label": "Notifications"
+  },
+  {
+   "default": "0",
+   "description": "Master switch for all automated emails.",
+   "fieldname": "enable_vendor_lifecycle_emails",
+   "fieldtype": "Check",
+   "label": "Use Emails"
+  },
+  {
+   "depends_on": "eval:doc.enable_vendor_lifecycle_emails",
+   "description": "Email account used to send all Vendor Lifecycle emails.",
+   "fieldname": "vendor_lifecycle_email_account",
+   "fieldtype": "Link",
+   "label": "Email Account",
+   "link_filters": "[[\"Email Account\",\"enable_outgoing\",\"=\",1]]",
+   "mandatory_depends_on": "eval:doc.enable_vendor_lifecycle_emails",
+   "options": "Email Account"
+  },
+  {
+   "depends_on": "eval:doc.enable_vendor_lifecycle_emails",
+   "description": "Addresses always CC'd on every email (comma-separated).",
+   "fieldname": "vendor_lifecycle_email_always_cc",
+   "fieldtype": "Small Text",
+   "label": "Always CC"
   }
  ],
  "grid_page_length": 50,
@@ -218,7 +257,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-08-03 12:34:31.754912",
+ "modified": "2026-09-05 21:00:00.000000",
  "modified_by": "Administrator",
  "module": "Vendor Lifecycle",
  "name": "Vendor Lifecycle Settings",

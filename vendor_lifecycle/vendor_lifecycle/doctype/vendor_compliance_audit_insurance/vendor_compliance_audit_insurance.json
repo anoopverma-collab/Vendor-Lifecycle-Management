@@ -1,0 +1,96 @@
+{
+ "actions": [],
+ "creation": "2026-08-06 10:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "insurance_type",
+  "policy_number",
+  "insurer",
+  "coverage_amount",
+  "expiry_date",
+  "valid_globally",
+  "column_break_valid_countries",
+  "valid_countries",
+  "valid_states",
+  "document"
+ ],
+ "fields": [
+  {
+   "fieldname": "insurance_type",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Insurance Type",
+   "options": "Insurance Type",
+   "link_filters": "[[\"Insurance Type\",\"disabled\",\"=\",0]]",
+   "reqd": 1
+  },
+  {
+   "fieldname": "policy_number",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Policy Number"
+  },
+  {
+   "fieldname": "insurer",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Insurer",
+   "options": "Insurer",
+   "link_filters": "[[\"Insurer\",\"disabled\",\"=\",0]]"
+  },
+  {
+   "fieldname": "coverage_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Coverage Amount"
+  },
+  {
+   "fieldname": "expiry_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Expiry Date"
+  },
+  {
+   "default": "0",
+   "fieldname": "valid_globally",
+   "fieldtype": "Check",
+   "label": "Valid Globally"
+  },
+  {
+   "fieldname": "column_break_valid_countries",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:!doc.valid_globally",
+   "description": "Comma-separated if more than one.",
+   "fieldname": "valid_countries",
+   "fieldtype": "Data",
+   "label": "Valid In Countries"
+  },
+  {
+   "depends_on": "eval:!doc.valid_globally",
+   "description": "Comma-separated if more than one.",
+   "fieldname": "valid_states",
+   "fieldtype": "Data",
+   "label": "Valid In States"
+  },
+  {
+   "fieldname": "document",
+   "fieldtype": "Attach",
+   "label": "Document"
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-06 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "Vendor Compliance Audit Insurance",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

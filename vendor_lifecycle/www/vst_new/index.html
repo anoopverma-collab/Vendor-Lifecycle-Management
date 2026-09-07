@@ -1,0 +1,72 @@
+{% extends "templates/web.html" %}
+
+{% block page_content %}
+<h2>{{ _("New Support Ticket") }}</h2>
+<form id="vst-new-form">
+	{% if vendors|length > 1 %}
+	<div class="form-group mb-3">
+		<label>{{ _("Vendor Account") }}</label>
+		<select class="form-control" name="vendor" required>
+			<option value="">{{ _("Select...") }}</option>
+			{% for v in vendors %}
+			<option value="{{ v }}">{{ v }}</option>
+			{% endfor %}
+		</select>
+	</div>
+	{% endif %}
+	<div class="form-group mb-3">
+		<label>{{ _("Subject") }}</label>
+		<input type="text" class="form-control" name="subject" required>
+	</div>
+	<div class="form-group mb-3">
+		<label>{{ _("Priority") }}</label>
+		<select class="form-control" name="priority">
+			<option value="Low">{{ _("Low") }}</option>
+			<option value="Medium" selected>{{ _("Medium") }}</option>
+			<option value="High">{{ _("High") }}</option>
+		</select>
+	</div>
+	<div class="form-group mb-3">
+		<label>{{ _("Description") }}</label>
+		<textarea class="form-control" name="description" rows="5"></textarea>
+	</div>
+	<button type="submit" class="btn btn-primary">{{ _("Submit Ticket") }}</button>
+</form>
+{% endblock %}
+
+{% block script %}
+<script>
+document.getElementById("vst-new-form").addEventListener("submit", function (e) {
+	e.preventDefault();
+	var form = e.target;
+	var submitBtn = form.querySelector("button[type=submit]");
+	submitBtn.disabled = true;
+
+	var doc = {
+		doctype: "Vendor Support Ticket",
+		subject: form.subject.value,
+		priority: form.priority.value,
+		description: form.description.value,
+	};
+	if (form.vendor) {
+		doc.vendor = form.vendor.value;
+	}
+
+	frappe.call({
+		type: "POST",
+		method: "frappe.client.insert",
+		args: { doc: doc },
+		callback: function (r) {
+			if (r.message) {
+				window.location.href = "/vendor-support-tickets/" + encodeURIComponent(r.message.name);
+			} else {
+				submitBtn.disabled = false;
+			}
+		},
+		error: function () {
+			submitBtn.disabled = false;
+		},
+	});
+});
+</script>
+{% endblock %}

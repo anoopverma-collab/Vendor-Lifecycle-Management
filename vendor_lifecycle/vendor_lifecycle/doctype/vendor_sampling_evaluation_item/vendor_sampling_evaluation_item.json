@@ -6,29 +6,55 @@
  "engine": "InnoDB",
  "field_order": [
   "item_code",
+  "sample_description",
+  "sample_status",
+  "received_on",
   "estimated_capacity_per_day",
   "finalized_cost",
   "quality_pass_attempts"
  ],
  "fields": [
   {
+   "columns": 3,
+   "description": "Optional — or describe it below.",
    "fieldname": "item_code",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Item",
-   "options": "Item",
-   "reqd": 1
+   "options": "Item"
+  },
+  {
+   "columns": 3,
+   "description": "If no Item is linked above.",
+   "fieldname": "sample_description",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "What's Being Evaluated"
+  },
+  {
+   "columns": 2,
+   "default": "",
+   "fieldname": "sample_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Sample Status",
+   "options": "\nNot Received\nIn-Transit\nReceived\nIn Use\nReturned to Vendor\nDisposed"
+  },
+  {
+   "columns": 2,
+   "fieldname": "received_on",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Received On"
   },
   {
    "fieldname": "estimated_capacity_per_day",
    "fieldtype": "Int",
-   "in_list_view": 1,
    "label": "Estimated Capacity / Day"
   },
   {
    "fieldname": "finalized_cost",
    "fieldtype": "Currency",
-   "in_list_view": 1,
    "label": "Finalized Cost"
   },
   {

@@ -1,0 +1,21 @@
+{
+ "creation": "2026-09-07 00:00:00.000000",
+ "docstatus": 0,
+ "doctype": "Number Card",
+ "document_type": "Vendor Onboarding Request",
+ "dynamic_filters_json": "[]",
+ "filters_json": "[[\"Vendor Onboarding Request\",\"docstatus\",\"=\",0]]",
+ "function": "Count",
+ "idx": 0,
+ "is_public": 1,
+ "is_standard": 1,
+ "label": "Draft Onboarding Requests",
+ "modified": "2026-09-07 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "Draft Onboarding Requests",
+ "owner": "Administrator",
+ "show_percentage_stats": 0,
+ "stats_time_interval": "Monthly",
+ "type": "Document Type"
+}

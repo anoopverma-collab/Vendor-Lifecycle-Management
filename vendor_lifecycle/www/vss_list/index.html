@@ -1,0 +1,39 @@
+{% extends "templates/web.html" %}
+
+{% block page_content %}
+<h2 class="mb-3">{{ _("Satisfaction Surveys") }}</h2>
+
+{% if surveys %}
+<div class="table-responsive">
+	<table class="table">
+		<thead>
+			<tr>
+				<th>{{ _("Period") }}</th>
+				<th>{{ _("Survey Date") }}</th>
+				<th>{{ _("Status") }}</th>
+				<th></th>
+			</tr>
+		</thead>
+		<tbody>
+			{% set badge_class = {
+				"Open": "secondary",
+				"In Progress": "info",
+				"Ratings Given": "warning",
+				"Completed": "success",
+				"Cancelled": "danger",
+			} %}
+			{% for s in surveys %}
+			<tr>
+				<td>{{ s.period }}</td>
+				<td>{{ s.survey_date }}</td>
+				<td><span class="badge badge-{{ badge_class.get(s.status, 'secondary') }}">{{ _(s.status) }}</span></td>
+				<td><a href="/vendor-satisfaction-surveys/{{ s.name }}">{{ _("View") }}</a></td>
+			</tr>
+			{% endfor %}
+		</tbody>
+	</table>
+</div>
+{% else %}
+<p class="text-muted">{{ _("No surveys yet.") }}</p>
+{% endif %}
+{% endblock %}

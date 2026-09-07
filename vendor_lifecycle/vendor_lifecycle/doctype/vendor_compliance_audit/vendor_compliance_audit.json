@@ -8,18 +8,43 @@
  "field_order": [
   "kyc",
   "vendor",
-  "audit_date",
-  "auditor",
-  "result",
+  "onboarding_request",
   "column_break_top",
-  "checklist_template",
+  "audit_date",
+  "outcome",
+  "valid_until",
+  "section_break_audit_team",
+  "conducted_by_external_agency",
+  "auditors",
+  "external_auditor",
+  "external_agency_contact_person",
+  "external_agency_contact_number",
+  "external_agency_contact_email",
+  "column_break_audit_team",
+  "proof_of_visit",
+  "facility_applicable",
   "facility_area",
   "facility_area_unit",
-  "section_break_checklist",
+  "tab_break_checklist",
+  "checklist_template",
   "checklist_items",
-  "section_break_notes",
-  "photos",
-  "notes"
+  "section_break_financial",
+  "financial_stability_outcome",
+  "financial_documents",
+  "column_break_financial",
+  "financial_stability_notes",
+  "tab_break_licenses",
+  "license_template",
+  "licenses",
+  "tab_break_insurance",
+  "insurance_template",
+  "insurance_certificates",
+  "insurance_perils",
+  "section_break_override",
+  "force_overridden",
+  "amended_from",
+  "column_break_override",
+  "force_override_reason"
  ],
  "fields": [
   {
@@ -28,7 +53,7 @@
    "in_list_view": 1,
    "label": "Vendor KYC",
    "options": "Vendor KYC",
-   "read_only_depends_on": "eval:!doc.__islocal",
+   "read_only": 1,
    "reqd": 1
   },
   {
@@ -37,7 +62,19 @@
    "in_list_view": 1,
    "label": "Vendor",
    "options": "Supplier",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "onboarding_request",
+   "fieldtype": "Link",
+   "label": "Vendor Onboarding Request",
+   "options": "Vendor Onboarding Request",
    "read_only": 1
+  },
+  {
+   "fieldname": "column_break_top",
+   "fieldtype": "Column Break"
   },
   {
    "default": "Today",
@@ -48,14 +85,8 @@
    "reqd": 1
   },
   {
-   "fieldname": "auditor",
-   "fieldtype": "Link",
-   "label": "Auditor",
-   "options": "User"
-  },
-  {
    "default": "Needs Review",
-   "fieldname": "result",
+   "fieldname": "outcome",
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Result",
@@ -63,31 +94,103 @@
    "read_only": 1
   },
   {
-   "fieldname": "column_break_top",
+   "description": "Auto-set when Result is Passed; blank otherwise.",
+   "fieldname": "valid_until",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Valid Until",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_audit_team",
+   "fieldtype": "Section Break",
+   "label": "Audit Team"
+  },
+  {
+   "default": "0",
+   "fieldname": "conducted_by_external_agency",
+   "fieldtype": "Check",
+   "label": "Conducted by External Agency"
+  },
+  {
+   "depends_on": "eval:!doc.conducted_by_external_agency",
+   "fieldname": "auditors",
+   "fieldtype": "Table MultiSelect",
+   "label": "Auditors (Internal)",
+   "options": "Vendor Compliance Audit Auditor"
+  },
+  {
+   "depends_on": "eval:doc.conducted_by_external_agency",
+   "description": "Must be an enabled, unfrozen Supplier.",
+   "fieldname": "external_auditor",
+   "fieldtype": "Link",
+   "label": "External Auditor / Agency",
+   "link_filters": "[[\"Supplier\",\"disabled\",\"=\",0],[\"Supplier\",\"is_frozen\",\"=\",0]]",
+   "options": "Supplier"
+  },
+  {
+   "depends_on": "eval:doc.conducted_by_external_agency",
+   "fieldname": "external_agency_contact_person",
+   "fieldtype": "Data",
+   "label": "External Agency Contact Person"
+  },
+  {
+   "depends_on": "eval:doc.conducted_by_external_agency",
+   "fieldname": "external_agency_contact_number",
+   "fieldtype": "Phone",
+   "label": "External Agency Contact Number"
+  },
+  {
+   "depends_on": "eval:doc.conducted_by_external_agency",
+   "fieldname": "external_agency_contact_email",
+   "fieldtype": "Data",
+   "label": "External Agency Contact Email",
+   "options": "Email"
+  },
+  {
+   "fieldname": "column_break_audit_team",
    "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.conducted_by_external_agency",
+   "fieldname": "proof_of_visit",
+   "fieldtype": "Attach",
+   "label": "Proof of Visit"
+  },
+  {
+   "description": "\"No\" clears Facility Area/Unit.",
+   "fieldname": "facility_applicable",
+   "fieldtype": "Select",
+   "label": "Facility Applicable",
+   "options": "\nYes\nNo"
+  },
+  {
+   "depends_on": "eval:doc.facility_applicable=='Yes'",
+   "fieldname": "facility_area",
+   "fieldtype": "Float",
+   "label": "Facility Area",
+   "mandatory_depends_on": "eval:doc.facility_applicable=='Yes'"
+  },
+  {
+   "default": "Sq M",
+   "depends_on": "eval:doc.facility_applicable=='Yes'",
+   "fieldname": "facility_area_unit",
+   "fieldtype": "Select",
+   "label": "Unit",
+   "mandatory_depends_on": "eval:doc.facility_applicable=='Yes'",
+   "options": "Sq M\nSq Ft\nSq Yd\nAcres\nHectares"
+  },
+  {
+   "fieldname": "tab_break_checklist",
+   "fieldtype": "Tab Break",
+   "label": "Checklist"
   },
   {
    "fieldname": "checklist_template",
    "fieldtype": "Link",
    "label": "Checklist Template",
+   "link_filters": "[[\"Audit Checklist Template\",\"disabled\",\"=\",0]]",
    "options": "Audit Checklist Template"
-  },
-  {
-   "fieldname": "facility_area",
-   "fieldtype": "Float",
-   "label": "Facility Area"
-  },
-  {
-   "default": "Sq M",
-   "fieldname": "facility_area_unit",
-   "fieldtype": "Select",
-   "label": "Unit",
-   "options": "Sq M\nSq Ft"
-  },
-  {
-   "fieldname": "section_break_checklist",
-   "fieldtype": "Section Break",
-   "label": "Checklist"
   },
   {
    "fieldname": "checklist_items",
@@ -96,24 +199,117 @@
    "options": "Vendor Compliance Audit Item"
   },
   {
-   "fieldname": "section_break_notes",
+   "fieldname": "section_break_financial",
    "fieldtype": "Section Break",
-   "label": "Notes"
+   "label": "Financial Stability"
   },
   {
-   "fieldname": "photos",
+   "default": "Not Reviewed",
+   "description": "Unstable fails the Result and requires Notes below.",
+   "fieldname": "financial_stability_outcome",
+   "fieldtype": "Select",
+   "label": "Financial Stability Outcome",
+   "options": "Not Reviewed\nStable\nUnstable"
+  },
+  {
+   "fieldname": "financial_documents",
    "fieldtype": "Attach",
-   "label": "Facility Photos / Evidence"
+   "label": "Supporting Documents (Financial Statements, Credit Report, etc.)"
   },
   {
-   "fieldname": "notes",
-   "fieldtype": "Text Editor",
+   "fieldname": "column_break_financial",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Turnover, credit rating, payment history, etc.",
+   "fieldname": "financial_stability_notes",
+   "fieldtype": "Small Text",
    "label": "Notes"
+  },
+  {
+   "fieldname": "tab_break_licenses",
+   "fieldtype": "Tab Break",
+   "label": "Licenses & Permits"
+  },
+  {
+   "description": "Optional \u2014 loads and locks the types below.",
+   "fieldname": "license_template",
+   "fieldtype": "Link",
+   "label": "Licenses and Permits Template",
+   "link_filters": "[[\"Licenses and Permits Template\",\"disabled\",\"=\",0]]",
+   "options": "Licenses and Permits Template"
+  },
+  {
+   "fieldname": "licenses",
+   "fieldtype": "Table",
+   "label": "Licenses & Permits",
+   "options": "Vendor Compliance Audit License"
+  },
+  {
+   "fieldname": "tab_break_insurance",
+   "fieldtype": "Tab Break",
+   "label": "Insurance Certificates"
+  },
+  {
+   "description": "Optional \u2014 loads and locks the types below.",
+   "fieldname": "insurance_template",
+   "fieldtype": "Link",
+   "label": "Insurance Template",
+   "link_filters": "[[\"Insurance Template\",\"disabled\",\"=\",0]]",
+   "options": "Insurance Template"
+  },
+  {
+   "fieldname": "insurance_certificates",
+   "fieldtype": "Table",
+   "label": "Insurance Certificates",
+   "options": "Vendor Compliance Audit Insurance"
+  },
+  {
+   "description": "One row per Coverage Type per policy above.",
+   "fieldname": "insurance_perils",
+   "fieldtype": "Table",
+   "label": "Coverage Breakdown",
+   "options": "Vendor Compliance Audit Insurance Peril"
+  },
+  {
+   "fieldname": "section_break_override",
+   "fieldtype": "Section Break"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.docstatus === 1 && doc.outcome === \"Failed\"",
+   "description": "Set automatically when this result is force-overridden. Not manually editable.",
+   "fieldname": "force_overridden",
+   "fieldtype": "Check",
+   "label": "Force Overridden",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Vendor Compliance Audit",
+   "print_hide": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_override",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.force_overridden",
+   "fieldname": "force_override_reason",
+   "fieldtype": "Small Text",
+   "label": "Force Override Reason",
+   "no_copy": 1,
+   "read_only": 1
   }
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2026-08-03 12:51:42.036303",
+ "modified": "2026-09-02 16:00:00.000000",
  "modified_by": "Administrator",
  "module": "Vendor Lifecycle",
  "name": "Vendor Compliance Audit",
@@ -159,6 +355,7 @@
    "write": 1
   }
  ],
+ "row_format": "Dynamic",
  "sort_field": "creation",
  "sort_order": "DESC",
  "states": [],

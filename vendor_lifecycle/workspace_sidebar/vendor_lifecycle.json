@@ -71,6 +71,18 @@
    "icon": "",
    "indent": 0,
    "keep_closed": 0,
+   "label": "Vendor Background Check",
+   "link_to": "Vendor Background Check",
+   "link_type": "DocType",
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 1,
+   "collapsible": 1,
+   "icon": "",
+   "indent": 0,
+   "keep_closed": 0,
    "label": "Vendor Compliance Audit",
    "link_to": "Vendor Compliance Audit",
    "link_type": "DocType",
@@ -85,18 +97,6 @@
    "keep_closed": 0,
    "label": "Vendor Sampling Evaluation",
    "link_to": "Vendor Sampling Evaluation",
-   "link_type": "DocType",
-   "show_arrow": 0,
-   "type": "Link"
-  },
-  {
-   "child": 1,
-   "collapsible": 1,
-   "icon": "",
-   "indent": 0,
-   "keep_closed": 0,
-   "label": "Vendor Reference Check",
-   "link_to": "Vendor Reference Check",
    "link_type": "DocType",
    "show_arrow": 0,
    "type": "Link"
@@ -224,8 +224,32 @@
    "icon": "",
    "indent": 0,
    "keep_closed": 0,
-   "label": "Deboarding Reason",
-   "link_to": "Deboarding Reason",
+   "label": "Compliance Check Type",
+   "link_to": "Compliance Check Type",
+   "link_type": "DocType",
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 1,
+   "collapsible": 1,
+   "icon": "",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Compliance Check Source",
+   "link_to": "Compliance Check Source",
+   "link_type": "DocType",
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 1,
+   "collapsible": 1,
+   "icon": "",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Compliance Check Template",
+   "link_to": "Compliance Check Template",
    "link_type": "DocType",
    "show_arrow": 0,
    "type": "Link"
@@ -243,7 +267,7 @@
    "type": "Link"
   }
  ],
- "modified": "2026-08-03 14:40:06.931794",
+ "modified": "2026-09-04 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Vendor Lifecycle",
  "name": "Vendor Lifecycle",

@@ -1,0 +1,21 @@
+{
+ "creation": "2026-09-06 00:00:00.000000",
+ "docstatus": 0,
+ "doctype": "Number Card",
+ "document_type": "Vendor Deboarding Checklist",
+ "dynamic_filters_json": "[]",
+ "filters_json": "[[\"Vendor Deboarding Checklist\",\"docstatus\",\"=\",0],[\"Vendor Deboarding Checklist\",\"clearance_attachment\",\"is\",\"set\"],[\"Vendor Deboarding Checklist\",\"signed_clearance_certificate\",\"is\",\"not set\"]]",
+ "function": "Count",
+ "idx": 0,
+ "is_public": 1,
+ "is_standard": 1,
+ "label": "Awaiting Signed Clearance Certificate",
+ "modified": "2026-09-06 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "Awaiting Signed Clearance Certificate",
+ "owner": "Administrator",
+ "show_percentage_stats": 0,
+ "stats_time_interval": "Monthly",
+ "type": "Document Type"
+}

@@ -13,12 +13,16 @@
   "column_break_top",
   "opened_on",
   "closed_on",
+  "attachment",
+  "attachment_2",
+  "resolution_rating",
+  "resolved_by",
+  "closed_by",
   "section_break_description",
   "description",
-  "attachment",
-  "section_break_resolution",
+  "column_break_description",
   "resolution",
-  "resolution_rating"
+  "last_reminder_sent"
  ],
  "fields": [
   {
@@ -27,7 +31,7 @@
    "in_list_view": 1,
    "label": "Vendor",
    "options": "Supplier",
-   "read_only": 1,
+   "read_only_depends_on": "eval:!doc.__islocal",
    "reqd": 1
   },
   {
@@ -52,7 +56,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Status",
-   "options": "Open\nResolved\nClosed",
+   "options": "Open\nIn Progress\nResolved\nReopened\nClosed\nInvalid",
    "permlevel": 1,
    "read_only": 1
   },
@@ -75,6 +79,40 @@
    "read_only": 1
   },
   {
+   "fieldname": "attachment",
+   "fieldtype": "Attach",
+   "label": "Attachment"
+  },
+  {
+   "fieldname": "attachment_2",
+   "fieldtype": "Attach",
+   "label": "Attachment 2"
+  },
+  {
+   "description": "Set by the vendor when they close the ticket.",
+   "fieldname": "resolution_rating",
+   "fieldtype": "Rating",
+   "label": "Resolution Rating",
+   "permlevel": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "resolved_by",
+   "fieldtype": "Link",
+   "label": "Resolved By",
+   "options": "User",
+   "permlevel": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "closed_by",
+   "fieldtype": "Link",
+   "label": "Closed By",
+   "options": "User",
+   "permlevel": 1,
+   "read_only": 1
+  },
+  {
    "fieldname": "section_break_description",
    "fieldtype": "Section Break",
    "label": "Issue"
@@ -85,14 +123,8 @@
    "label": "Description"
   },
   {
-   "fieldname": "attachment",
-   "fieldtype": "Attach",
-   "label": "Attachment"
-  },
-  {
-   "fieldname": "section_break_resolution",
-   "fieldtype": "Section Break",
-   "label": "Resolution"
+   "fieldname": "column_break_description",
+   "fieldtype": "Column Break"
   },
   {
    "fieldname": "resolution",
@@ -101,16 +133,16 @@
    "permlevel": 1
   },
   {
-   "description": "Set by the vendor when they close the ticket.",
-   "fieldname": "resolution_rating",
-   "fieldtype": "Rating",
-   "label": "Resolution Rating",
-   "permlevel": 1,
+   "fieldname": "last_reminder_sent",
+   "fieldtype": "Date",
+   "hidden": 1,
+   "label": "Last Reminder Sent",
+   "no_copy": 1,
    "read_only": 1
   }
  ],
  "links": [],
- "modified": "2026-08-03 14:14:10.250850",
+ "modified": "2026-09-04 09:00:00.000000",
  "modified_by": "Administrator",
  "module": "Vendor Lifecycle",
  "name": "Vendor Support Ticket",

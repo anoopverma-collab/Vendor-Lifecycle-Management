@@ -1,0 +1,266 @@
+{% extends "templates/web.html" %}
+
+{% block page_content %}
+{% set badge_class = {
+	"Open": "secondary",
+	"In Progress": "info",
+	"Resolved": "warning",
+	"Reopened": "danger",
+	"Closed": "success",
+	"Invalid": "dark",
+} %}
+<div class="card mb-3">
+	<div class="card-body">
+		<div class="d-flex justify-content-between align-items-start flex-wrap">
+			<h3 class="mb-1">{{ doc.subject }}</h3>
+			<div class="d-flex align-items-center flex-wrap" style="gap: 8px;">
+				<span class="badge badge-{{ badge_class.get(doc.status, 'secondary') }} px-3 py-2">{{ _(doc.status) }}</span>
+				{% if doc.status in ("Resolved", "Invalid") %}
+				<button class="btn btn-danger btn-sm" id="vst-reopen-btn">{{ _("Not Fixed — Reopen") if doc.status == "Resolved" else _("Reopen This Ticket") }}</button>
+				{% endif %}
+				{% if doc.status != "Closed" %}
+				<!-- Shown for as long as the ticket isn't Closed — the
+				     server side (close_ticket) still requires Resolved
+				     first and gives a clear error otherwise; once closed
+				     it's final and this disappears. -->
+				<button class="btn btn-primary btn-sm" id="vst-close-btn">{{ _("Close Ticket") }}</button>
+				{% endif %}
+			</div>
+		</div>
+		<div class="text-muted small mb-3">{{ doc.name }}</div>
+
+		<div class="row">
+			<div class="col-sm-4 mb-2">
+				<div class="text-muted small text-uppercase">{{ _("Priority") }}</div>
+				<div>{{ doc.priority }}</div>
+			</div>
+			<div class="col-sm-4 mb-2">
+				<div class="text-muted small text-uppercase">{{ _("Opened") }}</div>
+				<div>{{ doc.get_formatted("opened_on") }}</div>
+			</div>
+			{% if doc.status == "Resolved" %}
+			<div class="col-sm-4 mb-2">
+				<div class="text-muted small text-uppercase">{{ _("Rate the Resolution") }}</div>
+				<select id="vst-rating" class="form-control form-control-sm">
+					<option value="" {% if not doc.resolution_rating %}selected{% endif %}>{{ _("Select...") }}</option>
+					<option value="0.2" {% if doc.resolution_rating == 0.2 %}selected{% endif %}>{{ _("1 star") }}</option>
+					<option value="0.4" {% if doc.resolution_rating == 0.4 %}selected{% endif %}>{{ _("2 stars") }}</option>
+					<option value="0.6" {% if doc.resolution_rating == 0.6 %}selected{% endif %}>{{ _("3 stars") }}</option>
+					<option value="0.8" {% if doc.resolution_rating == 0.8 %}selected{% endif %}>{{ _("4 stars") }}</option>
+					<option value="1.0" {% if doc.resolution_rating == 1.0 %}selected{% endif %}>{{ _("5 stars") }}</option>
+				</select>
+			</div>
+			{% endif %}
+			{% if doc.closed_on %}
+			<div class="col-sm-4 mb-2">
+				<div class="text-muted small text-uppercase">{{ _("Closed") }}</div>
+				<div>{{ doc.get_formatted("closed_on") }}</div>
+			</div>
+			{% endif %}
+		</div>
+
+		<hr class="my-3">
+
+		<div class="row">
+			<div class="col-sm-{{ '6' if doc.resolution else '12' }}">
+				<div class="text-muted small text-uppercase mb-1">{{ _("Issue") }}</div>
+				{% if can_edit_description %}
+				<script id="vst-doc-data" type="application/json">{{ doc_json }}</script>
+				<textarea class="form-control mb-2" id="vst-description" rows="4">{{ doc.description or "" }}</textarea>
+				<button class="btn btn-sm btn-primary" id="vst-save-description-btn">{{ _("Save") }}</button>
+				{% else %}
+				<div>{{ doc.description or "-" }}</div>
+				{% endif %}
+
+				<div class="row mt-3">
+					<div class="col-sm-6">
+						<div class="text-muted small text-uppercase mb-1">{{ _("Attachment") }}</div>
+						{% if doc.attachment %}
+						<div class="mb-1"><a href="{{ doc.attachment }}" target="_blank" rel="noopener">{{ doc.attachment.split("/") | last }}</a></div>
+						{% endif %}
+						{% if can_edit_description %}
+						<input type="file" class="form-control-file vst-attachment-input" data-fieldname="attachment">
+						{% endif %}
+					</div>
+					<div class="col-sm-6">
+						<div class="text-muted small text-uppercase mb-1">{{ _("Attachment 2") }}</div>
+						{% if doc.attachment_2 %}
+						<div class="mb-1"><a href="{{ doc.attachment_2 }}" target="_blank" rel="noopener">{{ doc.attachment_2.split("/") | last }}</a></div>
+						{% endif %}
+						{% if can_edit_description %}
+						<input type="file" class="form-control-file vst-attachment-input" data-fieldname="attachment_2">
+						{% endif %}
+					</div>
+				</div>
+			</div>
+
+			{% if doc.resolution %}
+			<div class="col-sm-6">
+				<div class="text-muted small text-uppercase mb-1">{{ _("Note") if doc.status == "Invalid" else _("Resolution") }}</div>
+				<!-- Read-only display only — the vendor can never edit
+				     this, regardless of status; only staff set it, via
+				     Mark Resolved / Mark Invalid on the Desk form. -->
+				<div>{{ doc.resolution }}</div>
+				{% if doc.status == "Closed" and doc.resolution_rating %}
+				<div class="text-muted small mt-2">{{ _("Your rating") }}: {{ (doc.resolution_rating * 5) | round | int }} / 5</div>
+				{% endif %}
+			</div>
+			{% endif %}
+		</div>
+	</div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+var closeBtn = document.getElementById("vst-close-btn");
+if (closeBtn) {
+	closeBtn.addEventListener("click", function () {
+		// The rating selector only exists once the ticket is Resolved —
+		// this button is visible in every other status too (closing is
+		// allowed any time), so it may not be there. When it is there, a
+		// real choice is required — it starts blank now rather than
+		// defaulting to a pre-picked star count.
+		var ratingEl = document.getElementById("vst-rating");
+		if (ratingEl && !ratingEl.value) {
+			frappe.msgprint(__("Please rate the resolution before closing."));
+			return;
+		}
+		var rating = ratingEl ? parseFloat(ratingEl.value) : null;
+		// Closing is final (see reopen_ticket — a Closed ticket can never
+		// be reopened), so confirm before doing anything — "No" leaves
+		// the ticket completely untouched.
+		frappe.confirm(__("Close this ticket? This can't be undone."), function () {
+			closeBtn.disabled = true;
+			frappe.call({
+				type: "POST",
+				method: "run_doc_method",
+				args: {
+					dt: "Vendor Support Ticket",
+					dn: "{{ doc.name }}",
+					method: "close_ticket",
+					args: { resolution_rating: rating },
+				},
+				callback: function () {
+					window.location.reload();
+				},
+				error: function () {
+					closeBtn.disabled = false;
+				},
+			});
+		});
+	});
+}
+
+var ratingSelect = document.getElementById("vst-rating");
+if (ratingSelect) {
+	ratingSelect.addEventListener("change", function () {
+		if (!ratingSelect.value) {
+			return;
+		}
+		// Persists immediately on selection, independent of Close Ticket —
+		// set_resolution_rating() is what actually writes it (see the
+		// controller for why a plain save() can't be used here).
+		frappe.call({
+			type: "POST",
+			method: "run_doc_method",
+			args: {
+				dt: "Vendor Support Ticket",
+				dn: "{{ doc.name }}",
+				method: "set_resolution_rating",
+				args: { resolution_rating: parseFloat(ratingSelect.value) },
+			},
+		});
+	});
+}
+
+var reopenBtn = document.getElementById("vst-reopen-btn");
+if (reopenBtn) {
+	reopenBtn.addEventListener("click", function () {
+		reopenBtn.disabled = true;
+		frappe.call({
+			type: "POST",
+			method: "run_doc_method",
+			args: {
+				dt: "Vendor Support Ticket",
+				dn: "{{ doc.name }}",
+				method: "reopen_ticket",
+			},
+			callback: function () {
+				window.location.reload();
+			},
+			error: function () {
+				reopenBtn.disabled = false;
+			},
+		});
+	});
+}
+
+document.querySelectorAll(".vst-attachment-input").forEach(function (input) {
+	input.addEventListener("change", function () {
+		if (!input.files.length) {
+			return;
+		}
+		input.disabled = true;
+		var fieldname = input.getAttribute("data-fieldname");
+		var formData = new FormData();
+		formData.append("file", input.files[0]);
+		formData.append("doctype", "Vendor Support Ticket");
+		formData.append("docname", "{{ doc.name }}");
+		formData.append("is_private", "1");
+
+		// upload_file() only creates the File record — it does NOT set the
+		// field on the ticket itself (that only happens if an existing
+		// file's is_private flag changes, not on a fresh upload), so the
+		// returned file_url still has to be saved onto the doc explicitly,
+		// same embed-full-doc-and-save pattern as the description field.
+		fetch("/api/method/upload_file", {
+			method: "POST",
+			headers: { "X-Frappe-CSRF-Token": frappe.csrf_token },
+			body: formData,
+		})
+			.then(function (r) {
+				if (!r.ok) {
+					throw new Error("upload failed");
+				}
+				return r.json();
+			})
+			.then(function (data) {
+				var baseDoc = JSON.parse(document.getElementById("vst-doc-data").textContent);
+				baseDoc[fieldname] = data.message.file_url;
+				return frappe.call({
+					type: "POST",
+					method: "frappe.client.save",
+					args: { doc: baseDoc },
+				});
+			})
+			.then(function () {
+				window.location.reload();
+			})
+			.catch(function () {
+				input.disabled = false;
+			});
+	});
+});
+
+var saveDescriptionBtn = document.getElementById("vst-save-description-btn");
+if (saveDescriptionBtn) {
+	saveDescriptionBtn.addEventListener("click", function () {
+		saveDescriptionBtn.disabled = true;
+		var baseDoc = JSON.parse(document.getElementById("vst-doc-data").textContent);
+		baseDoc.description = document.getElementById("vst-description").value;
+		frappe.call({
+			type: "POST",
+			method: "frappe.client.save",
+			args: { doc: baseDoc },
+			callback: function () {
+				window.location.reload();
+			},
+			error: function () {
+				saveDescriptionBtn.disabled = false;
+			},
+		});
+	});
+}
+</script>
+{% endblock %}

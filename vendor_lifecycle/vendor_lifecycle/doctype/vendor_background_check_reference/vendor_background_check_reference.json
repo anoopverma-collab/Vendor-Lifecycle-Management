@@ -1,0 +1,222 @@
+{
+ "actions": [],
+ "autoname": "VBCR-.YYYY.-.#####",
+ "creation": "2026-08-14 00:00:00.000000",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "field_order": [
+  "background_check",
+  "reference_name",
+  "reference_company",
+  "column_break_reference_top",
+  "reference_email",
+  "reference_contact",
+  "reference_city_country",
+  "section_break_ratings",
+  "rating_template",
+  "column_break_rating_template",
+  "average_rating",
+  "column_break_average_rating",
+  "outcome",
+  "result_method_resolved",
+  "section_break_ratings_table",
+  "ratings",
+  "section_break_remarks",
+  "remarks",
+  "column_break_remarks",
+  "call_recording",
+  "reference_check_document",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "background_check",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Vendor Background Check",
+   "options": "Vendor Background Check",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "reference_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Reference Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "reference_company",
+   "fieldtype": "Data",
+   "label": "Reference's Company"
+  },
+  {
+   "fieldname": "column_break_reference_top",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "reference_email",
+   "fieldtype": "Data",
+   "label": "Reference Email",
+   "options": "Email"
+  },
+  {
+   "fieldname": "reference_contact",
+   "fieldtype": "Phone",
+   "label": "Reference Contact Number",
+   "reqd": 1
+  },
+  {
+   "fieldname": "reference_city_country",
+   "fieldtype": "Data",
+   "label": "Reference's City/Country"
+  },
+  {
+   "fieldname": "section_break_ratings",
+   "fieldtype": "Section Break",
+   "label": "Ratings"
+  },
+  {
+   "description": "Optional — auto-loads criteria below.",
+   "fieldname": "rating_template",
+   "fieldtype": "Link",
+   "label": "Rating Criteria Template",
+   "link_filters": "[[\"Rating Criteria Template\",\"disabled\",\"=\",0]]",
+   "options": "Rating Criteria Template"
+  },
+  {
+   "fieldname": "column_break_rating_template",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.result_method_resolved != 'Each Criteria Must Pass' && doc.result_method_resolved != 'Majority of Criteria'",
+   "description": "Auto-calculated from Scores below. Only meaningful for the \"Average\" Result Method.",
+   "fieldname": "average_rating",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Average Rating",
+   "precision": "1",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_average_rating",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Needs Review",
+   "fieldname": "outcome",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Result",
+   "options": "Needs Review\nPassed\nFailed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "result_method_resolved",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Result Method (Resolved)",
+   "options": "\nAverage\nEach Criteria Must Pass\nMajority of Criteria",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_ratings_table",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "ratings",
+   "fieldtype": "Table",
+   "label": "Ratings",
+   "options": "Vendor Background Check Rating"
+  },
+  {
+   "fieldname": "section_break_remarks",
+   "fieldtype": "Section Break",
+   "label": "Remarks & Documentation"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "column_break_remarks",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "call_recording",
+   "fieldtype": "Attach",
+   "label": "Call Recording"
+  },
+  {
+   "description": "If check was done on a physical form.",
+   "fieldname": "reference_check_document",
+   "fieldtype": "Attach",
+   "label": "Reference Check Document (Physical Record)"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Vendor Background Check Reference",
+   "print_hide": 1,
+   "read_only": 1
+  }
+ ],
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-08-14 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "Vendor Background Check Reference",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Vendor Lifecycle Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Vendor Lifecycle User",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

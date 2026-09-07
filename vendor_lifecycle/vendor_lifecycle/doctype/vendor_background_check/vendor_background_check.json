@@ -1,0 +1,332 @@
+{
+ "actions": [],
+ "autoname": "VBC-.YYYY.-.#####",
+ "creation": "2026-08-03 12:51:42.036303",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "field_order": [
+  "kyc",
+  "vendor",
+  "conducted_by_external_agency",
+  "conducted_by",
+  "column_break_top_2",
+  "onboarding_request",
+  "overall_status",
+  "section_break_external_agency",
+  "external_agency",
+  "external_agency_contact_person",
+  "external_agency_contact_email",
+  "column_break_external_agency",
+  "external_agency_contact_number",
+  "proof_of_visit",
+  "section_break_compliance_checks",
+  "compliance_check_template",
+  "compliance_checks",
+  "section_break_ownership_screening",
+  "ubo_details",
+  "column_break_ubo",
+  "ubo_declaration",
+  "tab_break_references_result",
+  "section_break_ratings",
+  "reference_summary",
+  "no_references_hint",
+  "section_break_result_row",
+  "remarks",
+  "column_break_result_row",
+  "outcome",
+  "result_method_resolved",
+  "force_overridden",
+  "force_override_reason",
+  "connections_tab",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "kyc",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Vendor KYC",
+   "options": "Vendor KYC",
+   "read_only_depends_on": "eval:!doc.__islocal",
+   "reqd": 1
+  },
+  {
+   "fieldname": "vendor",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Vendor",
+   "options": "Supplier",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "conducted_by_external_agency",
+   "fieldtype": "Check",
+   "label": "Conducted by External Agency"
+  },
+  {
+   "fieldname": "conducted_by",
+   "fieldtype": "Table MultiSelect",
+   "label": "Conducted By (Internal)",
+   "options": "Vendor Background Check Auditor",
+   "depends_on": "eval:!doc.conducted_by_external_agency"
+  },
+  {
+   "fieldname": "column_break_top_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "onboarding_request",
+   "fieldtype": "Link",
+   "label": "Vendor Onboarding Request",
+   "options": "Vendor Onboarding Request",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "Needs Review",
+   "description": "Failed if the Result or any Compliance Check fails; Passed only if both pass.",
+   "fieldname": "overall_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Overall Status",
+   "options": "Needs Review\nPassed\nFailed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_external_agency",
+   "fieldtype": "Section Break",
+   "label": "External Agency"
+  },
+  {
+   "description": "The Supplier record for the external agency (must be enabled and not frozen).",
+   "fieldname": "external_agency",
+   "fieldtype": "Link",
+   "label": "External Agency",
+   "options": "Supplier",
+   "link_filters": "[[\"Supplier\",\"disabled\",\"=\",0],[\"Supplier\",\"is_frozen\",\"=\",0]]",
+   "depends_on": "eval:doc.conducted_by_external_agency"
+  },
+  {
+   "fieldname": "external_agency_contact_person",
+   "fieldtype": "Data",
+   "label": "External Agency Contact Person",
+   "depends_on": "eval:doc.conducted_by_external_agency"
+  },
+  {
+   "fieldname": "external_agency_contact_email",
+   "fieldtype": "Data",
+   "options": "Email",
+   "label": "External Agency Contact Email",
+   "depends_on": "eval:doc.conducted_by_external_agency"
+  },
+  {
+   "fieldname": "column_break_external_agency",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "external_agency_contact_number",
+   "fieldtype": "Phone",
+   "label": "External Agency Contact Number",
+   "depends_on": "eval:doc.conducted_by_external_agency"
+  },
+  {
+   "depends_on": "eval:doc.conducted_by_external_agency",
+   "fieldname": "proof_of_visit",
+   "fieldtype": "Attach",
+   "label": "Proof of Visit"
+  },
+  {
+   "fieldname": "section_break_compliance_checks",
+   "fieldtype": "Section Break",
+   "label": "Compliance Checks"
+  },
+  {
+   "description": "Set of checks required. Loads Check Types below; rows can't be added by hand.",
+   "fieldname": "compliance_check_template",
+   "fieldtype": "Link",
+   "label": "Compliance Check Template",
+   "link_filters": "[[\"Compliance Check Template\",\"disabled\",\"=\",0]]",
+   "options": "Compliance Check Template",
+   "reqd": 1
+  },
+  {
+   "description": "One row per Check Type from the Template above.",
+   "fieldname": "compliance_checks",
+   "fieldtype": "Table",
+   "label": "Compliance Checks",
+   "options": "Vendor Background Check Compliance Item"
+  },
+  {
+   "fieldname": "section_break_ownership_screening",
+   "fieldtype": "Section Break",
+   "label": "Ownership Declaration",
+   "collapsible": 0
+  },
+  {
+   "description": "Who ultimately owns or controls this vendor (AML/KYC).",
+   "fieldname": "ubo_details",
+   "fieldtype": "Small Text",
+   "label": "Ultimate Beneficial Owner(s)"
+  },
+  {
+   "fieldname": "column_break_ubo",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "ubo_declaration",
+   "fieldtype": "Attach",
+   "label": "UBO Declaration"
+  },
+  {
+   "fieldname": "tab_break_references_result",
+   "fieldtype": "Tab Break",
+   "label": "References & Result"
+  },
+  {
+   "fieldname": "section_break_ratings",
+   "fieldtype": "Section Break",
+   "label": "References"
+  },
+  {
+   "allow_on_submit": 1,
+   "description": "Auto-filled from References (cancelled ones excluded).",
+   "fieldname": "reference_summary",
+   "fieldtype": "Table",
+   "label": "References",
+   "options": "Vendor Background Check Reference Summary",
+   "read_only": 1
+  },
+  {
+   "fieldname": "no_references_hint",
+   "fieldtype": "HTML",
+   "options": "<div class=\"text-success\">No References yet \u2014 use the \"Create Reference\" button above to add one.</div>",
+   "depends_on": "eval:!doc.reference_summary || doc.reference_summary.length === 0"
+  },
+  {
+   "fieldname": "section_break_result_row",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Text",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "column_break_result_row",
+   "fieldtype": "Column Break"
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "Needs Review",
+   "description": "Computed from all References, per the Result Method.",
+   "fieldname": "outcome",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Reference Result",
+   "options": "Needs Review\nPassed\nFailed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "result_method_resolved",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Result Method (Resolved)",
+   "options": "\nAverage\nEach Reference Must Pass\nMajority of References",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.docstatus === 1 && doc.overall_status === \"Failed\"",
+   "description": "Set automatically when this result is force-overridden. Not manually editable.",
+   "fieldname": "force_overridden",
+   "fieldtype": "Check",
+   "label": "Force Overridden",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.force_overridden",
+   "fieldname": "force_override_reason",
+   "fieldtype": "Small Text",
+   "label": "Force Override Reason",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "connections_tab",
+   "fieldtype": "Tab Break",
+   "label": "Connections",
+   "show_dashboard": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Vendor Background Check",
+   "print_hide": 1,
+   "read_only": 1
+  }
+ ],
+ "is_submittable": 1,
+ "links": [
+  {
+   "group": "Vendor Lifecycle",
+   "link_doctype": "Vendor Background Check Reference",
+   "link_fieldname": "background_check"
+  }
+ ],
+ "modified": "2026-09-03 18:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "Vendor Background Check",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Vendor Lifecycle Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Vendor Lifecycle User",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

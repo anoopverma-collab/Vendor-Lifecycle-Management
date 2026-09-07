@@ -1,0 +1,45 @@
+{% extends "templates/web.html" %}
+
+{% block page_content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+	<h2 class="mb-0">{{ _("Support Tickets") }}</h2>
+	<a class="btn btn-primary" href="/vendor-support-tickets/new">{{ _("New Ticket") }}</a>
+</div>
+
+{% if tickets %}
+<div class="table-responsive">
+	<table class="table">
+		<thead>
+			<tr>
+				<th>{{ _("Subject") }}</th>
+				<th>{{ _("Priority") }}</th>
+				<th>{{ _("Status") }}</th>
+				<th>{{ _("Opened") }}</th>
+				<th></th>
+			</tr>
+		</thead>
+		<tbody>
+			{% set badge_class = {
+				"Open": "secondary",
+				"In Progress": "info",
+				"Resolved": "warning",
+				"Reopened": "danger",
+				"Closed": "success",
+				"Invalid": "dark",
+			} %}
+			{% for t in tickets %}
+			<tr>
+				<td>{{ t.subject }}</td>
+				<td>{{ t.priority }}</td>
+				<td><span class="badge badge-{{ badge_class.get(t.status, 'secondary') }}">{{ _(t.status) }}</span></td>
+				<td>{{ t.opened_on }}</td>
+				<td><a href="/vendor-support-tickets/{{ t.name }}">{{ _("View") }}</a></td>
+			</tr>
+			{% endfor %}
+		</tbody>
+	</table>
+</div>
+{% else %}
+<p class="text-muted">{{ _("No support tickets yet.") }}</p>
+{% endif %}
+{% endblock %}

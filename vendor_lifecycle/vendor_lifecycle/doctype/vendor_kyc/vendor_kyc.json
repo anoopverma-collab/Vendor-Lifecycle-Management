@@ -9,26 +9,72 @@
   "onboarding_request",
   "supplier",
   "status",
+  "section_break_verification",
+  "verified_by_external_agency",
+  "verified_by",
+  "external_verification_agency",
+  "external_agency_contact_person",
+  "column_break_verification",
+  "external_agency_contact_number",
+  "external_agency_contact_email",
+  "proof_of_visit",
   "section_break_firm",
   "firm_name",
-  "supplier_name_override",
   "legal_entity_type",
-  "business_type",
-  "other_business_type",
   "owner_name",
-  "official_email",
+  "column_break_firm",
   "owner_contact",
   "owner_id_proof",
-  "column_break_firm",
+  "section_break_supplier_name_override",
+  "supplier_name_override",
+  "section_break_supplier_setup",
+  "supplier_group",
+  "billing_currency",
+  "is_transporter",
+  "is_internal_supplier",
+  "column_break_supplier_setup",
+  "payment_terms_template",
+  "tax_withholding_category",
+  "represents_company",
+  "section_break_default_accounts",
+  "accounts",
+  "tab_break_contact",
+  "contact",
   "contact_person_name",
   "contact_person_number",
+  "official_email",
+  "column_break_contact_tab",
   "contact_person_id_proof",
   "reference_name",
   "reference_contact",
+  "tab_break_address",
+  "address",
+  "section_break_address",
+  "address_line_1",
+  "address_line_2",
+  "city",
+  "state_master",
+  "state",
+  "column_break_address_tax",
+  "country",
+  "pincode",
+  "address_type",
+  "geo_location",
+  "section_break_gstin_address",
+  "gstin_address_line",
+  "gstin_city",
+  "gstin_state",
+  "gstin_pincode",
+  "is_address_same_as_gstin",
+  "tab_break_business",
+  "section_break_business_type",
+  "business_type",
+  "other_business_type",
   "section_break_business_details",
   "business_details_hint",
-  "estimated_monthly_capacity",
+  "estimated_monthly_production_capacity",
   "specialization",
+  "establishment_date",
   "years_in_business",
   "team_size",
   "column_break_business_details",
@@ -50,47 +96,40 @@
   "product_or_platform_name",
   "support_sla",
   "services_covered",
-  "section_break_address",
-  "firm_address",
-  "city",
-  "state",
-  "country",
-  "pincode",
-  "address_type",
-  "geo_location",
-  "column_break_address",
-  "preferred_working_mode",
-  "other_companies_worked_with",
-  "section_break_gstin_address",
-  "gstin_address_line",
-  "gstin_city",
-  "gstin_state",
-  "gstin_pincode",
-  "is_address_same_as_gstin",
-  "section_break_compliance",
+  "tab_break_compliance",
+  "section_break_tax",
   "tax_id",
+  "pan_card",
   "gstin_uin",
-  "column_break_compliance",
+  "column_break_tax",
+  "tax_id_proof",
+  "pan_card_attachment",
+  "gstin_certificate",
+  "section_break_compliance",
   "business_registration_number",
+  "certificate_of_incorporation",
   "tax_certificate",
-  "section_break_supplier_setup",
-  "supplier_group",
-  "billing_currency",
-  "column_break_supplier_setup",
-  "payment_terms_template",
-  "tax_withholding_category",
+  "tax_certificate_expiry_date",
+  "column_break_compliance",
+  "msme_udyam_registration_number",
+  "iec_code",
+  "tab_break_bank",
+  "bank_account",
   "section_break_bank",
   "bank_account_name",
   "bank",
   "ifsc_branch_code",
+  "bank_proof",
   "column_break_bank",
   "bank_account_no",
   "account_type",
   "is_default_bank_account",
-  "bank_proof",
   "bank_statement",
-  "section_break_workforce",
-  "workforce"
+  "section_break_international_bank",
+  "iban",
+  "swift_bic_code",
+  "connections_tab",
+  "amended_from"
  ],
  "fields": [
   {
@@ -103,20 +142,76 @@
   },
   {
    "fieldname": "supplier",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "label": "Supplier",
-   "options": "Supplier",
    "read_only": 1
   },
   {
-   "default": "Draft",
+   "default": "In Progress",
    "fieldname": "status",
    "fieldtype": "Select",
+   "hidden": 1,
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Status",
-   "options": "Draft\nVerified",
+   "options": "In Progress\nVerified\nRejected",
    "read_only": 1
+  },
+  {
+   "fieldname": "section_break_verification",
+   "fieldtype": "Section Break",
+   "label": "Verification"
+  },
+  {
+   "default": "0",
+   "fieldname": "verified_by_external_agency",
+   "fieldtype": "Check",
+   "label": "Verified by External Agency"
+  },
+  {
+   "fieldname": "verified_by",
+   "fieldtype": "Table MultiSelect",
+   "label": "Verified By",
+   "options": "Vendor KYC Verifier",
+   "depends_on": "eval:!doc.verified_by_external_agency"
+  },
+  {
+   "description": "The Supplier record for the external verification agency (must be enabled and not frozen).",
+   "fieldname": "external_verification_agency",
+   "fieldtype": "Link",
+   "label": "External Verification Agency",
+   "options": "Supplier",
+   "link_filters": "[[\"Supplier\",\"disabled\",\"=\",0],[\"Supplier\",\"is_frozen\",\"=\",0]]",
+   "depends_on": "eval:doc.verified_by_external_agency"
+  },
+  {
+   "fieldname": "external_agency_contact_person",
+   "fieldtype": "Data",
+   "label": "External Agency Contact Person",
+   "depends_on": "eval:doc.verified_by_external_agency"
+  },
+  {
+   "fieldname": "column_break_verification",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "external_agency_contact_number",
+   "fieldtype": "Phone",
+   "label": "External Agency Contact Number",
+   "depends_on": "eval:doc.verified_by_external_agency"
+  },
+  {
+   "fieldname": "external_agency_contact_email",
+   "fieldtype": "Data",
+   "options": "Email",
+   "label": "External Agency Contact Email",
+   "depends_on": "eval:doc.verified_by_external_agency"
+  },
+  {
+   "fieldname": "proof_of_visit",
+   "fieldtype": "Attach",
+   "label": "Proof of Visit",
+   "depends_on": "eval:doc.verified_by_external_agency"
   },
   {
    "fieldname": "section_break_firm",
@@ -131,28 +226,11 @@
    "reqd": 1
   },
   {
-   "description": "If set, the Supplier record uses this instead of Firm Name — e.g. when the legal firm name and the name the vendor trades under differ.",
-   "fieldname": "supplier_name_override",
-   "fieldtype": "Data",
-   "label": "Supplier Name (if different from Firm Name)"
-  },
-  {
    "fieldname": "legal_entity_type",
    "fieldtype": "Select",
    "label": "Legal Entity Type",
-   "options": "\nSole Proprietorship\nPartnership\nLimited Liability Partnership\nPrivate Limited Company\nPublic Limited Company\nCorporation\nNon-Profit\nGovernment Entity\nOther"
-  },
-  {
-   "fieldname": "business_type",
-   "fieldtype": "Select",
-   "label": "Business Type",
-   "options": "\nManufacturer\nTrader\nService Provider\nContractor / Job Worker\nLogistics / Transporter\nFreelancer / Consultant\nRaw Material Supplier\nEquipment / Machinery Supplier\nTechnology / Software Vendor\nFacility / Maintenance Services\nOther"
-  },
-  {
-   "depends_on": "eval:doc.business_type=='Other'",
-   "fieldname": "other_business_type",
-   "fieldtype": "Data",
-   "label": "Please Specify Business Type"
+   "options": "\nSole Proprietorship\nPartnership\nLimited Liability Partnership\nPrivate Limited Company\nPublic Limited Company\nCorporation\nNon-Profit\nGovernment Entity\nOther",
+   "reqd": 1
   },
   {
    "fieldname": "owner_name",
@@ -160,10 +238,8 @@
    "label": "Firm Owner / Director Name"
   },
   {
-   "fieldname": "official_email",
-   "fieldtype": "Data",
-   "label": "Official Email",
-   "options": "Email"
+   "fieldname": "column_break_firm",
+   "fieldtype": "Column Break"
   },
   {
    "fieldname": "owner_contact",
@@ -176,18 +252,121 @@
    "label": "Owner ID Proof"
   },
   {
-   "fieldname": "column_break_firm",
+   "collapsible": 1,
+   "collapsible_depends_on": "eval:doc.supplier_name_override",
+   "fieldname": "section_break_supplier_name_override",
+   "fieldtype": "Section Break",
+   "hidden": 1,
+   "label": "Supplier Name (if different from Firm Name)"
+  },
+  {
+   "description": "If set, the Supplier record uses this instead of Firm Name \u2014 e.g. when the legal firm name and the name the vendor trades under differ.",
+   "fieldname": "supplier_name_override",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Supplier Name (if different from Firm Name)"
+  },
+  {
+   "fieldname": "section_break_supplier_setup",
+   "fieldtype": "Section Break",
+   "label": "Supplier Setup"
+  },
+  {
+   "fieldname": "supplier_group",
+   "fieldtype": "Link",
+   "label": "Supplier Group",
+   "options": "Supplier Group"
+  },
+  {
+   "description": "Left blank on a new KYC — doesn't inherit the site's default currency.",
+   "fieldname": "billing_currency",
+   "fieldtype": "Link",
+   "ignore_user_permissions": 1,
+   "label": "Billing Currency",
+   "options": "Currency"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_transporter",
+   "fieldtype": "Check",
+   "label": "Is Transporter"
+  },
+  {
+   "default": "0",
+   "description": "Used for inter-company transactions",
+   "fieldname": "is_internal_supplier",
+   "fieldtype": "Check",
+   "label": "Is Internal Supplier"
+  },
+  {
+   "fieldname": "column_break_supplier_setup",
    "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "payment_terms_template",
+   "fieldtype": "Link",
+   "label": "Payment Terms Template",
+   "options": "Payment Terms Template"
+  },
+  {
+   "fieldname": "tax_withholding_category",
+   "fieldtype": "Link",
+   "label": "Tax Withholding Category",
+   "options": "Tax Withholding Category"
+  },
+  {
+   "depends_on": "eval:doc.is_internal_supplier",
+   "fieldname": "represents_company",
+   "fieldtype": "Link",
+   "label": "Represents Company",
+   "options": "Company"
+  },
+  {
+   "fieldname": "section_break_default_accounts",
+   "fieldtype": "Section Break",
+   "label": "Default Accounts"
+  },
+  {
+   "description": "Override the default payable / advance accounts on a per-company basis. Leave blank to use each company's defaults.",
+   "fieldname": "accounts",
+   "fieldtype": "Table",
+   "label": "Per-Company Accounts",
+   "options": "Party Account"
+  },
+  {
+   "fieldname": "tab_break_contact",
+   "fieldtype": "Tab Break",
+   "label": "Contact"
+  },
+  {
+   "description": "The Contact record created automatically when this KYC's Supplier was made. Additional contacts created via the button below aren't tracked here.",
+   "fieldname": "contact",
+   "fieldtype": "Data",
+   "label": "Linked Contact Record",
+   "read_only": 1
   },
   {
    "fieldname": "contact_person_name",
    "fieldtype": "Data",
-   "label": "Contact Person Name"
+   "label": "Contact Person Name",
+   "reqd": 1
   },
   {
    "fieldname": "contact_person_number",
    "fieldtype": "Phone",
-   "label": "Contact Person Number"
+   "label": "Contact Person Number",
+   "reqd": 1
+  },
+  {
+   "fieldname": "official_email",
+   "fieldtype": "Data",
+   "label": "Official Email",
+   "options": "Email",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_contact_tab",
+   "fieldtype": "Column Break"
   },
   {
    "fieldname": "contact_person_id_proof",
@@ -205,6 +384,108 @@
    "label": "Reference Contact Number"
   },
   {
+   "fieldname": "tab_break_address",
+   "fieldtype": "Tab Break",
+   "label": "Address"
+  },
+  {
+   "description": "The Address record created automatically when this KYC's Supplier was made. Additional addresses created via the button below aren't tracked here.",
+   "fieldname": "address",
+   "fieldtype": "Data",
+   "label": "Linked Address Record",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_address",
+   "fieldtype": "Section Break",
+   "label": "Address Details"
+  },
+  {
+   "fieldname": "address_line_1",
+   "fieldtype": "Data",
+   "label": "Address Line 1",
+   "reqd": 1
+  },
+  {
+   "fieldname": "address_line_2",
+   "fieldtype": "Data",
+   "label": "Address Line 2"
+  },
+  {
+   "fieldname": "city",
+   "fieldtype": "Data",
+   "label": "City",
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.country",
+   "description": "Filtered to the Country selected.",
+   "fieldname": "state_master",
+   "fieldtype": "Link",
+   "label": "State",
+   "options": "State"
+  },
+  {
+   "fetch_from": "state_master.state_name",
+   "fieldname": "state",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "State",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_address_tax",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "country",
+   "fieldtype": "Link",
+   "ignore_user_permissions": 1,
+   "label": "Country",
+   "options": "Country",
+   "reqd": 1
+  },
+  {
+   "fieldname": "pincode",
+   "fieldtype": "Data",
+   "label": "Postal / ZIP Code",
+   "reqd": 1
+  },
+  {
+   "fieldname": "address_type",
+   "fieldtype": "Select",
+   "label": "Address Type",
+   "options": "\nBilling\nShipping\nOffice\nPersonal\nPlant\nPostal\nShop\nSubsidiary\nWarehouse\nCurrent\nPermanent\nOther"
+  },
+  {
+   "fieldname": "geo_location",
+   "fieldtype": "Data",
+   "label": "Firm Map Location"
+  },
+  {
+   "fieldname": "tab_break_business",
+   "fieldtype": "Tab Break",
+   "label": "Business Details"
+  },
+  {
+   "fieldname": "section_break_business_type",
+   "fieldtype": "Section Break",
+   "label": "Business Type"
+  },
+  {
+   "fieldname": "business_type",
+   "fieldtype": "Select",
+   "label": "Business Type",
+   "options": "\nManufacturer\nTrader\nService Provider\nContractor / Job Worker\nLogistics / Transporter\nFreelancer / Consultant\nRaw Material Supplier\nEquipment / Machinery Supplier\nTechnology / Software Vendor\nFacility / Maintenance Services\nOther",
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Other'",
+   "fieldname": "other_business_type",
+   "fieldtype": "Data",
+   "label": "Please Specify Business Type"
+  },
+  {
    "fieldname": "section_break_business_details",
    "fieldtype": "Section Break",
    "label": "Business Details"
@@ -217,9 +498,9 @@
   },
   {
    "depends_on": "eval:doc.business_type",
-   "fieldname": "estimated_monthly_capacity",
+   "fieldname": "estimated_monthly_production_capacity",
    "fieldtype": "Int",
-   "label": "Estimated Monthly Capacity"
+   "label": "Estimated Monthly Production Capacity"
   },
   {
    "depends_on": "eval:doc.business_type",
@@ -229,9 +510,18 @@
   },
   {
    "depends_on": "eval:doc.business_type",
+   "description": "Used to auto-calculate Years in Business below — that field can still be edited by hand afterward.",
+   "fieldname": "establishment_date",
+   "fieldtype": "Date",
+   "label": "Establishment Date"
+  },
+  {
+   "depends_on": "eval:doc.business_type",
    "fieldname": "years_in_business",
-   "fieldtype": "Int",
-   "label": "Years in Business"
+   "fieldtype": "Float",
+   "label": "Years in Business",
+   "non_negative": 1,
+   "precision": "2"
   },
   {
    "depends_on": "eval:doc.business_type",
@@ -354,61 +644,59 @@
    "label": "Services Covered"
   },
   {
-   "fieldname": "section_break_address",
+   "fieldname": "tab_break_compliance",
+   "fieldtype": "Tab Break",
+   "label": "Tax & Compliance"
+  },
+  {
+   "fieldname": "section_break_tax",
    "fieldtype": "Section Break",
-   "label": "Address"
+   "label": "Tax Details"
   },
   {
-   "fieldname": "firm_address",
-   "fieldtype": "Small Text",
-   "label": "Firm Address"
-  },
-  {
-   "fieldname": "city",
+   "fieldname": "tax_id",
    "fieldtype": "Data",
-   "label": "City"
+   "label": "Tax ID (PAN / VAT / EIN, etc.)",
+   "mandatory_depends_on": "eval:doc.country!='India'"
   },
   {
-   "fieldname": "state",
+   "depends_on": "eval:doc.country=='India'",
+   "description": "India-specific \u2014 shown only when Country is India.",
+   "fieldname": "pan_card",
    "fieldtype": "Data",
-   "label": "State"
+   "label": "PAN Card",
+   "mandatory_depends_on": "eval:doc.country=='India'"
   },
   {
-   "fieldname": "country",
-   "fieldtype": "Link",
-   "label": "Country",
-   "options": "Country"
-  },
-  {
-   "fieldname": "pincode",
+   "depends_on": "eval:doc.country=='India'",
+   "description": "India-specific \u2014 shown only when Country is India.",
+   "fieldname": "gstin_uin",
    "fieldtype": "Data",
-   "label": "Postal / ZIP Code"
+   "label": "GSTIN / UIN"
   },
   {
-   "fieldname": "address_type",
-   "fieldtype": "Select",
-   "label": "Address Type",
-   "options": "\nBilling\nShipping\nOffice\nPersonal\nPlant\nPostal\nShop\nSubsidiary\nWarehouse\nCurrent\nPermanent\nOther"
-  },
-  {
-   "fieldname": "geo_location",
-   "fieldtype": "Data",
-   "label": "Firm Map Location"
-  },
-  {
-   "fieldname": "column_break_address",
+   "fieldname": "column_break_tax",
    "fieldtype": "Column Break"
   },
   {
-   "fieldname": "preferred_working_mode",
-   "fieldtype": "Select",
-   "label": "Preferred Way of Working",
-   "options": "\nDirect\nThrough Agent"
+   "description": "Maximum file size: 10 MB.",
+   "fieldname": "tax_id_proof",
+   "fieldtype": "Attach",
+   "label": "Tax ID Proof"
   },
   {
-   "fieldname": "other_companies_worked_with",
-   "fieldtype": "Small Text",
-   "label": "Other Companies Worked With"
+   "depends_on": "eval:doc.country=='India'",
+   "description": "Maximum file size: 10 MB.",
+   "fieldname": "pan_card_attachment",
+   "fieldtype": "Attach",
+   "label": "PAN Card Attachment"
+  },
+  {
+   "depends_on": "eval:doc.country=='India'",
+   "description": "Maximum file size: 10 MB.",
+   "fieldname": "gstin_certificate",
+   "fieldtype": "Attach",
+   "label": "GSTIN Certificate"
   },
   {
    "depends_on": "eval:doc.country=='India' && doc.gstin_uin",
@@ -417,7 +705,7 @@
    "label": "Address Verification (GSTIN)"
   },
   {
-   "description": "Fetched from the GST database using the \"Fetch Address from GSTIN\" button. Requires the India Compliance app to be installed and configured — if it isn't, this stays blank and only the manually filled address above is used.",
+   "description": "Fetched from the GST database using the \"Fetch Address from GSTIN\" button. Requires the India Compliance app to be installed and configured \u2014 if it isn't, this stays blank and only the manually filled address above is used.",
    "fieldname": "gstin_address_line",
    "fieldtype": "Small Text",
    "label": "GSTIN Registered Address",
@@ -454,26 +742,16 @@
    "label": "Compliance Documents"
   },
   {
-   "fieldname": "tax_id",
-   "fieldtype": "Data",
-   "label": "Tax ID (PAN / VAT / EIN, etc.)"
-  },
-  {
-   "depends_on": "eval:doc.country=='India'",
-   "description": "India-specific — shown only when Country is India.",
-   "fieldname": "gstin_uin",
-   "fieldtype": "Data",
-   "label": "GSTIN / UIN"
-  },
-  {
-   "fieldname": "column_break_compliance",
-   "fieldtype": "Column Break"
-  },
-  {
    "description": "Company/incorporation registration number, where this is issued separately from the tax ID.",
    "fieldname": "business_registration_number",
    "fieldtype": "Data",
    "label": "Business Registration Number"
+  },
+  {
+   "description": "Maximum file size: 10 MB.",
+   "fieldname": "certificate_of_incorporation",
+   "fieldtype": "Attach",
+   "label": "Certificate of Incorporation"
   },
   {
    "fieldname": "tax_certificate",
@@ -481,37 +759,40 @@
    "label": "Tax Registration Certificate"
   },
   {
-   "fieldname": "section_break_supplier_setup",
-   "fieldtype": "Section Break",
-   "label": "Supplier Setup"
+   "depends_on": "eval:doc.tax_certificate",
+   "fieldname": "tax_certificate_expiry_date",
+   "fieldtype": "Date",
+   "label": "Tax Certificate Expiry Date"
   },
   {
-   "fieldname": "supplier_group",
-   "fieldtype": "Link",
-   "label": "Supplier Group",
-   "options": "Supplier Group"
-  },
-  {
-   "fieldname": "billing_currency",
-   "fieldtype": "Link",
-   "label": "Billing Currency",
-   "options": "Currency"
-  },
-  {
-   "fieldname": "column_break_supplier_setup",
+   "fieldname": "column_break_compliance",
    "fieldtype": "Column Break"
   },
   {
-   "fieldname": "payment_terms_template",
-   "fieldtype": "Link",
-   "label": "Payment Terms Template",
-   "options": "Payment Terms Template"
+   "depends_on": "eval:doc.country=='India'",
+   "description": "India-specific \u2014 shown only when Country is India. Optional unless the vendor is MSME/Udyam-registered.",
+   "fieldname": "msme_udyam_registration_number",
+   "fieldtype": "Data",
+   "label": "MSME / Udyam Registration Number"
   },
   {
-   "fieldname": "tax_withholding_category",
-   "fieldtype": "Link",
-   "label": "Tax Withholding Category",
-   "options": "Tax Withholding Category"
+   "depends_on": "eval:doc.country=='India'",
+   "description": "India-specific \u2014 shown only when Country is India. Only applicable if the vendor imports or exports goods/services.",
+   "fieldname": "iec_code",
+   "fieldtype": "Data",
+   "label": "Import Export Code (IEC)"
+  },
+  {
+   "fieldname": "tab_break_bank",
+   "fieldtype": "Tab Break",
+   "label": "Bank Details"
+  },
+  {
+   "description": "The Bank Account record created automatically when this KYC's Supplier was made. Additional bank accounts created via the button below aren't tracked here.",
+   "fieldname": "bank_account",
+   "fieldtype": "Data",
+   "label": "Linked Bank Account Record",
+   "read_only": 1
   },
   {
    "fieldname": "section_break_bank",
@@ -535,6 +816,11 @@
    "label": "IFSC Code / Branch Code"
   },
   {
+   "fieldname": "bank_proof",
+   "fieldtype": "Attach",
+   "label": "Bank Proof (Cancelled Cheque)"
+  },
+  {
    "fieldname": "column_break_bank",
    "fieldtype": "Column Break"
   },
@@ -556,30 +842,92 @@
    "label": "Is Default Bank Account"
   },
   {
-   "fieldname": "bank_proof",
-   "fieldtype": "Attach",
-   "label": "Bank Proof (Cancelled Cheque)"
-  },
-  {
    "fieldname": "bank_statement",
    "fieldtype": "Attach",
    "label": "Bank Statement"
   },
   {
-   "fieldname": "section_break_workforce",
+   "fieldname": "section_break_international_bank",
    "fieldtype": "Section Break",
-   "label": "Workforce"
+   "label": "International Bank Details"
   },
   {
-   "fieldname": "workforce",
-   "fieldtype": "Table",
-   "label": "Workforce Details",
-   "options": "Vendor KYC Workforce Detail"
+   "description": "For international wire transfers, where applicable.",
+   "fieldname": "iban",
+   "fieldtype": "Data",
+   "label": "IBAN"
+  },
+  {
+   "description": "For international wire transfers, where applicable.",
+   "fieldname": "swift_bic_code",
+   "fieldtype": "Data",
+   "label": "SWIFT / BIC Code"
+  },
+  {
+   "fieldname": "connections_tab",
+   "fieldtype": "Tab Break",
+   "label": "Connections",
+   "show_dashboard": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Vendor KYC",
+   "print_hide": 1,
+   "read_only": 1
   }
  ],
  "is_submittable": 1,
- "links": [],
- "modified": "2026-08-03 12:40:30.491883",
+ "links": [
+  {
+   "group": "Vendor Lifecycle",
+   "link_doctype": "Vendor Background Check",
+   "link_fieldname": "kyc"
+  },
+  {
+   "group": "Vendor Lifecycle",
+   "link_doctype": "Vendor Compliance Audit",
+   "link_fieldname": "kyc"
+  },
+  {
+   "group": "Vendor Lifecycle",
+   "link_doctype": "Vendor Sampling Evaluation",
+   "link_fieldname": "kyc"
+  },
+  {
+   "group": "Vendor Lifecycle",
+   "link_doctype": "Vendor Sign Off",
+   "link_fieldname": "kyc"
+  },
+  {
+   "group": "Records Created",
+   "link_doctype": "Address",
+   "link_fieldname": "vendor_kyc"
+  },
+  {
+   "group": "Records Created",
+   "link_doctype": "Contact",
+   "link_fieldname": "vendor_kyc"
+  },
+  {
+   "group": "Records Created",
+   "link_doctype": "Bank Account",
+   "link_fieldname": "vendor_kyc"
+  },
+  {
+   "group": "Records Created",
+   "link_doctype": "Supplier",
+   "link_fieldname": "vendor_kyc"
+  },
+  {
+   "group": "Records Created",
+   "link_doctype": "Purchase Invoice",
+   "link_fieldname": "vendor_lifecycle_source_name"
+  }
+ ],
+ "modified": "2026-09-03 21:00:00.000000",
  "modified_by": "Administrator",
  "module": "Vendor Lifecycle",
  "name": "Vendor KYC",

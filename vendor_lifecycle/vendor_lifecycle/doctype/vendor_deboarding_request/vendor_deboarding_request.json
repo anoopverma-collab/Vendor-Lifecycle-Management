@@ -8,21 +8,15 @@
  "field_order": [
   "vendor",
   "reason",
+  "column_break_top",
   "request_date",
   "status",
-  "column_break_top",
-  "behavior_rating",
-  "quality_rating",
-  "process_rating",
-  "rejection_percentage",
   "is_resolvable",
   "section_break_open_transactions",
   "open_transactions_summary",
-  "section_break_clearance",
-  "clearance_attachment",
-  "clearance_exception_reason",
-  "section_break_remarks",
-  "remarks"
+  "section_break_ratings",
+  "ratings",
+  "amended_from"
  ],
  "fields": [
   {
@@ -30,21 +24,26 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Vendor",
+   "link_filters": "[[\"Supplier\",\"disabled\",\"=\",0]]",
    "options": "Supplier",
    "reqd": 1
   },
   {
    "fieldname": "reason",
-   "fieldtype": "Link",
-   "in_list_view": 1,
+   "fieldtype": "Small Text",
    "label": "Reason",
-   "options": "Deboarding Reason"
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_top",
+   "fieldtype": "Column Break"
   },
   {
    "default": "Today",
    "fieldname": "request_date",
    "fieldtype": "Date",
    "label": "Request Date",
+   "read_only": 1,
    "reqd": 1
   },
   {
@@ -54,43 +53,20 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Status",
-   "options": "Draft\nApproved\nVendor Disabled",
+   "options": "Draft\nApproved\nRejected\nVendor Disabled",
    "read_only": 1
   },
   {
-   "fieldname": "column_break_top",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "behavior_rating",
-   "fieldtype": "Rating",
-   "label": "Vendor Behaviour"
-  },
-  {
-   "fieldname": "quality_rating",
-   "fieldtype": "Rating",
-   "label": "Vendor Product Quality"
-  },
-  {
-   "fieldname": "process_rating",
-   "fieldtype": "Rating",
-   "label": "Understanding of Our Process"
-  },
-  {
-   "fieldname": "rejection_percentage",
-   "fieldtype": "Percent",
-   "label": "Overall Rejection Percentage"
-  },
-  {
-   "default": "0",
    "fieldname": "is_resolvable",
-   "fieldtype": "Check",
-   "label": "Is the Issue with the Vendor Resolvable?"
+   "fieldtype": "Select",
+   "label": "Is the Issue with the Vendor Resolvable?",
+   "options": "\nYes\nNo\nMaybe",
+   "reqd": 1
   },
   {
    "fieldname": "section_break_open_transactions",
    "fieldtype": "Section Break",
-   "label": "Open Transactions (informational \u2014 does not block deboarding)"
+   "label": "Open Transactions (informational — does not block deboarding)"
   },
   {
    "fieldname": "open_transactions_summary",
@@ -98,36 +74,29 @@
    "label": "Open Transactions"
   },
   {
-   "fieldname": "section_break_clearance",
+   "fieldname": "section_break_ratings",
    "fieldtype": "Section Break",
-   "label": "Clearance Certificate"
+   "label": "Ratings"
   },
   {
-   "fieldname": "clearance_attachment",
-   "fieldtype": "Attach",
-   "label": "Clearance Certificate Sign-Off"
+   "fieldname": "ratings",
+   "fieldtype": "Table",
+   "label": "Ratings",
+   "options": "Vendor Deboarding Rating"
   },
   {
-   "depends_on": "eval:!doc.clearance_attachment",
-   "fieldname": "clearance_exception_reason",
-   "fieldtype": "Small Text",
-   "label": "Reason Clearance Certificate Is Not Attached",
-   "mandatory_depends_on": "eval:!doc.clearance_attachment"
-  },
-  {
-   "fieldname": "section_break_remarks",
-   "fieldtype": "Section Break",
-   "label": "Remarks"
-  },
-  {
-   "fieldname": "remarks",
-   "fieldtype": "Text Editor",
-   "label": "Remarks"
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Vendor Deboarding Request",
+   "print_hide": 1,
+   "read_only": 1
   }
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2026-08-03 13:08:45.433369",
+ "modified": "2026-09-05 08:00:00.000000",
  "modified_by": "Administrator",
  "module": "Vendor Lifecycle",
  "name": "Vendor Deboarding Request",

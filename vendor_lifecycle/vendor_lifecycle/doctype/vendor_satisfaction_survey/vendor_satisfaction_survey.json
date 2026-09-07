@@ -8,14 +8,18 @@
  "field_order": [
   "vendor",
   "period",
+  "column_break_survey",
   "survey_date",
-  "column_break_top",
-  "submitted_by",
+  "status",
+  "is_system_generated",
   "section_break_ratings",
   "ratings",
   "section_break_feedback",
   "issues",
-  "remarks"
+  "column_break_feedback",
+  "remarks",
+  "amended_from",
+  "last_reminder_sent"
  ],
  "fields": [
   {
@@ -24,7 +28,7 @@
    "in_list_view": 1,
    "label": "Vendor",
    "options": "Supplier",
-   "read_only": 1,
+   "read_only_depends_on": "eval:doc.is_system_generated",
    "reqd": 1
   },
   {
@@ -33,7 +37,12 @@
    "in_list_view": 1,
    "label": "Period",
    "options": "\nMonthly\nQuarterly\nHalf-Yearly\nYearly",
+   "read_only_depends_on": "eval:doc.is_system_generated",
    "reqd": 1
+  },
+  {
+   "fieldname": "column_break_survey",
+   "fieldtype": "Column Break"
   },
   {
    "default": "Today",
@@ -41,16 +50,26 @@
    "fieldtype": "Date",
    "in_list_view": 1,
    "label": "Survey Date",
+   "read_only": 1,
    "reqd": 1
   },
   {
-   "fieldname": "column_break_top",
-   "fieldtype": "Column Break"
+   "default": "Open",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Open\nIn Progress\nRatings Given\nCompleted\nCancelled",
+   "read_only": 1
   },
   {
-   "fieldname": "submitted_by",
-   "fieldtype": "Data",
-   "label": "Submitted By"
+   "default": "0",
+   "fieldname": "is_system_generated",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Is System Generated",
+   "read_only": 1
   },
   {
    "fieldname": "section_break_ratings",
@@ -74,19 +93,42 @@
    "label": "Areas of Concern"
   },
   {
+   "fieldname": "column_break_feedback",
+   "fieldtype": "Column Break"
+  },
+  {
    "fieldname": "remarks",
-   "fieldtype": "Text Editor",
+   "fieldtype": "Small Text",
    "label": "Suggestions for Improvement"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Vendor Satisfaction Survey",
+   "print_hide": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_reminder_sent",
+   "fieldtype": "Date",
+   "hidden": 1,
+   "label": "Last Reminder Sent",
+   "no_copy": 1,
+   "read_only": 1
   }
  ],
+ "is_submittable": 1,
  "links": [],
- "modified": "2026-08-03 14:14:10.250850",
+ "modified": "2026-09-04 03:00:00.000000",
  "modified_by": "Administrator",
  "module": "Vendor Lifecycle",
  "name": "Vendor Satisfaction Survey",
  "owner": "Administrator",
  "permissions": [
   {
+   "cancel": 1,
    "create": 1,
    "delete": 1,
    "email": 1,
@@ -96,9 +138,11 @@
    "report": 1,
    "role": "System Manager",
    "share": 1,
+   "submit": 1,
    "write": 1
   },
   {
+   "cancel": 1,
    "create": 1,
    "delete": 1,
    "email": 1,
@@ -108,6 +152,7 @@
    "report": 1,
    "role": "Vendor Lifecycle Manager",
    "share": 1,
+   "submit": 1,
    "write": 1
   },
   {
@@ -118,11 +163,11 @@
    "role": "Vendor Lifecycle User"
   },
   {
-   "create": 1,
    "email": 1,
    "print": 1,
    "read": 1,
    "role": "Supplier",
+   "submit": 1,
    "write": 1
   }
  ],

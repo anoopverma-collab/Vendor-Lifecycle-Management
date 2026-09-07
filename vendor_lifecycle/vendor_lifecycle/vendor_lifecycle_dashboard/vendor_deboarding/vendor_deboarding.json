@@ -1,0 +1,37 @@
+{
+ "cards": [
+  {
+   "card": "Draft Deboarding Requests"
+  },
+  {
+   "card": "Rejected Deboarding Requests"
+  },
+  {
+   "card": "Draft Deboarding Checklists"
+  },
+  {
+   "card": "Awaiting Signed Clearance Certificate"
+  },
+  {
+   "card": "Temporarily Enabled Suppliers"
+  }
+ ],
+ "charts": [
+  {
+   "chart": "Deboarding Requests by Status",
+   "width": "Full"
+  }
+ ],
+ "creation": "2026-09-06 00:00:00.000000",
+ "dashboard_name": "Vendor Deboarding",
+ "docstatus": 0,
+ "doctype": "Dashboard",
+ "idx": 0,
+ "is_default": 0,
+ "is_standard": 1,
+ "modified": "2026-09-06 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "Vendor Deboarding",
+ "owner": "Administrator"
+}

@@ -1,0 +1,21 @@
+{
+ "creation": "2026-09-07 00:00:00.000000",
+ "docstatus": 0,
+ "doctype": "Number Card",
+ "document_type": "Vendor Support Ticket",
+ "dynamic_filters_json": "[]",
+ "filters_json": "[[\"Vendor Support Ticket\",\"status\",\"in\",[\"Open\",\"Reopened\"]]]",
+ "function": "Count",
+ "idx": 0,
+ "is_public": 1,
+ "is_standard": 1,
+ "label": "Open Support Tickets",
+ "modified": "2026-09-07 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "Open Support Tickets",
+ "owner": "Administrator",
+ "show_percentage_stats": 0,
+ "stats_time_interval": "Monthly",
+ "type": "Document Type"
+}

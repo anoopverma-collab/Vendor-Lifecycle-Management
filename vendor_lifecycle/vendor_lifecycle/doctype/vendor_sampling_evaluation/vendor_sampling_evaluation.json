@@ -8,18 +8,22 @@
  "field_order": [
   "kyc",
   "vendor",
+  "onboarding_request",
   "evaluation_date",
   "column_break_top",
-  "open_to_new_development",
-  "documents_compiled",
+  "evaluation_outcome",
+  "remarks",
+  "attachment",
   "section_break_samples",
   "samples",
   "section_break_evaluation",
   "evaluation_template",
   "evaluation_results",
-  "section_break_remarks",
-  "remarks",
-  "vendor_comments"
+  "section_break_override",
+  "force_overridden",
+  "amended_from",
+  "column_break_override",
+  "force_override_reason"
  ],
  "fields": [
   {
@@ -28,7 +32,7 @@
    "in_list_view": 1,
    "label": "Vendor KYC",
    "options": "Vendor KYC",
-   "read_only_depends_on": "eval:!doc.__islocal",
+   "read_only": 1,
    "reqd": 1
   },
   {
@@ -37,6 +41,14 @@
    "in_list_view": 1,
    "label": "Vendor",
    "options": "Supplier",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "onboarding_request",
+   "fieldtype": "Link",
+   "label": "Vendor Onboarding Request",
+   "options": "Vendor Onboarding Request",
    "read_only": 1
   },
   {
@@ -52,16 +64,23 @@
    "fieldtype": "Column Break"
   },
   {
-   "default": "0",
-   "fieldname": "open_to_new_development",
-   "fieldtype": "Check",
-   "label": "Open to Fresh Sampling for New Products"
+   "default": "Not Reviewed",
+   "description": "Rejected disables the vendor.",
+   "fieldname": "evaluation_outcome",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Evaluation Outcome",
+   "options": "Not Reviewed\nApproved\nRejected"
   },
   {
-   "default": "0",
-   "fieldname": "documents_compiled",
-   "fieldtype": "Check",
-   "label": "Signed Documents Compiled"
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "attachment",
+   "fieldtype": "Attach",
+   "label": "Attachment"
   },
   {
    "fieldname": "section_break_samples",
@@ -80,10 +99,11 @@
    "label": "Evaluation Criteria"
   },
   {
-   "description": "Optional — pick a template to load your organization's own evaluation criteria (e.g. cost basis, quality checks, turnaround time). Leave blank to skip structured evaluation.",
+   "description": "Optional \u2014 load your evaluation criteria.",
    "fieldname": "evaluation_template",
    "fieldtype": "Link",
    "label": "Evaluation Template",
+   "link_filters": "[[\"Sampling Evaluation Template\",\"disabled\",\"=\",0]]",
    "options": "Sampling Evaluation Template"
   },
   {
@@ -93,24 +113,44 @@
    "options": "Vendor Sampling Evaluation Result"
   },
   {
-   "fieldname": "section_break_remarks",
-   "fieldtype": "Section Break",
-   "label": "Remarks"
+   "fieldname": "section_break_override",
+   "fieldtype": "Section Break"
   },
   {
-   "fieldname": "remarks",
-   "fieldtype": "Text Editor",
-   "label": "Remarks"
+   "default": "0",
+   "depends_on": "eval:doc.docstatus === 1 && doc.evaluation_outcome === \"Rejected\"",
+   "description": "Set automatically when this result is force-overridden. Not manually editable.",
+   "fieldname": "force_overridden",
+   "fieldtype": "Check",
+   "label": "Force Overridden",
+   "no_copy": 1,
+   "read_only": 1
   },
   {
-   "fieldname": "vendor_comments",
-   "fieldtype": "Text Editor",
-   "label": "Vendor Comments"
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Vendor Sampling Evaluation",
+   "print_hide": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_override",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.force_overridden",
+   "fieldname": "force_override_reason",
+   "fieldtype": "Small Text",
+   "label": "Force Override Reason",
+   "no_copy": 1,
+   "read_only": 1
   }
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2026-08-03 12:51:42.036303",
+ "modified": "2026-09-02 16:00:00.000000",
  "modified_by": "Administrator",
  "module": "Vendor Lifecycle",
  "name": "Vendor Sampling Evaluation",

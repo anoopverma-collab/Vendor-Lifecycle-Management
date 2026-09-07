@@ -1,0 +1,127 @@
+{% extends "templates/web.html" %}
+
+{% block page_content %}
+{% set badge_class = {
+	"Open": "secondary",
+	"In Progress": "info",
+	"Ratings Given": "warning",
+	"Completed": "success",
+	"Cancelled": "danger",
+} %}
+<div class="d-flex justify-content-between align-items-center">
+	<h2 class="mb-0">{{ _("Satisfaction Survey") }} — {{ doc.get_formatted("survey_date") }}</h2>
+	<span class="badge badge-{{ badge_class.get(doc.status, 'secondary') }}">{{ _(doc.status) }}</span>
+</div>
+<p class="text-muted">{{ _("Period") }}: {{ doc.period }}</p>
+
+{% if is_pending %}
+<script id="vss-doc-data" type="application/json">{{ doc_json }}</script>
+<form id="vss-edit-form">
+	{% if doc.ratings %}
+	<h5>{{ _("Ratings") }}</h5>
+	<table class="table" id="vss-ratings-table">
+		<thead><tr><th>{{ _("Criteria") }}</th><th>{{ _("Score") }}</th></tr></thead>
+		<tbody>
+			{% for r in doc.ratings %}
+			<tr data-row-name="{{ r.name }}">
+				<td>{{ r.criteria }}</td>
+				<td>
+					<select class="form-control vss-score" style="max-width: 150px;">
+						<option value="">{{ _("Not Rated") }}</option>
+						<option value="0.2" {% if r.score == 0.2 %}selected{% endif %}>1</option>
+						<option value="0.4" {% if r.score == 0.4 %}selected{% endif %}>2</option>
+						<option value="0.6" {% if r.score == 0.6 %}selected{% endif %}>3</option>
+						<option value="0.8" {% if r.score == 0.8 %}selected{% endif %}>4</option>
+						<option value="1.0" {% if r.score == 1.0 %}selected{% endif %}>5</option>
+					</select>
+				</td>
+			</tr>
+			{% endfor %}
+		</tbody>
+	</table>
+	{% endif %}
+
+	<div class="row">
+		<div class="form-group mb-3 col-sm-6">
+			<label>{{ _("Areas of Concern") }}</label>
+			<textarea class="form-control" name="issues" rows="3">{{ doc.issues or "" }}</textarea>
+		</div>
+		<div class="form-group mb-3 col-sm-6">
+			<label>{{ _("Suggestions for Improvement") }}</label>
+			<textarea class="form-control" name="remarks" rows="3">{{ doc.remarks or "" }}</textarea>
+		</div>
+	</div>
+	<button type="button" class="btn btn-default" id="vss-save-btn">{{ _("Save Draft") }}</button>
+	<button type="button" class="btn btn-primary" id="vss-submit-btn">{{ _("Submit Survey") }}</button>
+</form>
+{% else %}
+<div class="card p-3">
+	{% if doc.ratings %}
+	<table class="table">
+		<thead><tr><th>{{ _("Criteria") }}</th><th>{{ _("Score") }}</th></tr></thead>
+		<tbody>
+			{% for r in doc.ratings %}
+			<tr><td>{{ r.criteria }}</td><td>{{ ((r.score or 0) * 5) | round | int }} / 5</td></tr>
+			{% endfor %}
+		</tbody>
+	</table>
+	{% endif %}
+	<div class="row">
+		<div class="col-sm-6">
+			<p class="mb-1"><strong>{{ _("Areas of Concern") }}</strong></p>
+			<p>{{ doc.issues or "-" }}</p>
+		</div>
+		<div class="col-sm-6">
+			<p class="mb-1"><strong>{{ _("Suggestions for Improvement") }}</strong></p>
+			<p>{{ doc.remarks or "-" }}</p>
+		</div>
+	</div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block script %}
+{% if is_pending %}
+<script>
+function vssCollectDoc() {
+	var baseDoc = JSON.parse(document.getElementById("vss-doc-data").textContent);
+	var scoreByRowName = {};
+	document.querySelectorAll("#vss-ratings-table tbody tr").forEach(function (row) {
+		var select = row.querySelector(".vss-score");
+		scoreByRowName[row.getAttribute("data-row-name")] = select.value ? parseFloat(select.value) : null;
+	});
+	(baseDoc.ratings || []).forEach(function (row) {
+		if (row.name in scoreByRowName) {
+			row.score = scoreByRowName[row.name];
+		}
+	});
+	var form = document.getElementById("vss-edit-form");
+	baseDoc.issues = form.issues.value;
+	baseDoc.remarks = form.remarks.value;
+	return baseDoc;
+}
+
+function vssCallAndReload(method, btn) {
+	btn.disabled = true;
+	frappe.call({
+		type: "POST",
+		method: method,
+		args: { doc: vssCollectDoc() },
+		callback: function () {
+			window.location.reload();
+		},
+		error: function () {
+			btn.disabled = false;
+		},
+	});
+}
+
+document.getElementById("vss-save-btn").addEventListener("click", function (e) {
+	vssCallAndReload("frappe.client.save", e.target);
+});
+document.getElementById("vss-submit-btn").addEventListener("click", function (e) {
+	vssCallAndReload("frappe.client.submit", e.target);
+});
+</script>
+{% endif %}
+{% endblock %}
