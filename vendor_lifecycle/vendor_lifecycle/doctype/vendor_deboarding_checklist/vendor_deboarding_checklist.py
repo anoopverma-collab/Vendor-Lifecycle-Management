@@ -286,12 +286,31 @@ class VendorDeboardingChecklist(Document):
 		return get_kyc_vendor_contact(kyc) if kyc else {}
 
 	def _clearance_recipients(self):
+		# Three possible sources, in order: the KYC's own Official Email,
+		# the Supplier's Primary Contact (email_id, kept in sync by
+		# ERPNext core whenever a Contact is set as primary), and whatever
+		# was typed into Additional Email. Any of the three can be blank,
+		# and two or more can legitimately hold the same address — compare
+		# case-insensitively so a repeated address is only ever added once.
 		contact = self.vendor_contact()
+		candidates = [
+			contact.get("official_email"),
+			frappe.db.get_value("Supplier", self.supplier, "email_id") if self.supplier else None,
+			self.additional_email,
+		]
+
+		seen = set()
 		recipients = []
-		if contact.get("official_email"):
-			recipients.append(contact["official_email"])
-		if self.additional_email and self.additional_email not in recipients:
-			recipients.append(self.additional_email)
+		for email in candidates:
+			email = (email or "").strip()
+			if not email:
+				continue
+			key = email.lower()
+			if key in seen:
+				continue
+			seen.add(key)
+			recipients.append(email)
+
 		return recipients
 
 	def _build_clearance_email_context(self):
