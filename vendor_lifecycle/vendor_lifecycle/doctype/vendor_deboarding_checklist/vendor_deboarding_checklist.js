@@ -31,7 +31,13 @@ frappe.ui.form.on("Vendor Deboarding Checklist", {
 			});
 		}
 
-		if (frm.doc.docstatus === 0 && !frm.doc.signed_clearance_certificate && frm.doc.clearance_attachment) {
+		// Shown as soon as the checklist is a draft and not yet signed —
+		// same pattern as Vendor Sign Off's own "Send Email" button. It
+		// does not wait for clearance_attachment to already be set:
+		// send_clearance_certificate_email() itself throws a clear
+		// "attach it first" message if it's missing, exactly like Sign
+		// Off's send_signoff_email() does for its own Contract attachment.
+		if (frm.doc.docstatus === 0 && !frm.doc.signed_clearance_certificate) {
 			frm.add_custom_button(__("Send Clearance Certificate"), () => {
 				frappe.confirm(
 					__("Email the clearance certificate to the Supplier for signing?"),
