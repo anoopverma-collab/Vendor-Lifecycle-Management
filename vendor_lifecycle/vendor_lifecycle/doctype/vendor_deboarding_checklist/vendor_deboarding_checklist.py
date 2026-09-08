@@ -461,6 +461,39 @@ class VendorDeboardingChecklist(Document):
 
 		frappe.db.set_value("Vendor Deboarding Request", self.deboarding_request, "status", "Vendor Disabled")
 
+	def on_cancel(self):
+		# Undoes on_submit()'s side effects — every other submittable
+		# doctype in this app reverts what it caused on cancel (see the
+		# four onboarding stage doctypes' own _revert_disable_if_this_
+		# was_the_failed_one), but this one had no on_cancel at all, so
+		# cancelling a submitted Checklist left the Supplier disabled
+		# forever with no way back except the unrelated Temporarily
+		# Enable button.
+		self._revert_disable_if_this_was_the_one()
+		if self.is_temporarily_enabled:
+			self.db_set("is_temporarily_enabled", 0)
+			self.db_set("temporarily_enabled_on", None)
+
+	def _revert_disable_if_this_was_the_one(self):
+		if not self.supplier:
+			return
+		# Only one Checklist is ever active per vendor at a time (see the
+		# duplicate-checklist guard elsewhere), but check for another
+		# still-submitted one first anyway, same defensive pattern the
+		# onboarding stage doctypes use for their own equivalent checks.
+		other_submitted_exists = frappe.db.exists(
+			"Vendor Deboarding Checklist",
+			{"supplier": self.supplier, "docstatus": 1, "name": ["!=", self.name]},
+		)
+		if other_submitted_exists:
+			return
+		frappe.db.set_value("Supplier", self.supplier, {
+			"disabled": 0,
+			"vendor_lifecycle_status": "Active",
+		})
+		if self.deboarding_request:
+			frappe.db.set_value("Vendor Deboarding Request", self.deboarding_request, "status", "Approved")
+
 	@frappe.whitelist()
 	def load_checklist_from_template(self):
 		if not self.checklist_template:

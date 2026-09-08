@@ -207,13 +207,14 @@ document.querySelectorAll(".vst-attachment-input").forEach(function (input) {
 		formData.append("file", input.files[0]);
 		formData.append("doctype", "Vendor Support Ticket");
 		formData.append("docname", "{{ doc.name }}");
+		// Passed straight to upload_file() so the File it creates is homed
+		// to this field from the start, instead of a generic unattached
+		// File that a later frappe.client.save() would leave orphaned
+		// alongside a second, correctly-attached one — see
+		// set_attachment_field()'s own docstring for the full reasoning.
+		formData.append("fieldname", fieldname);
 		formData.append("is_private", "1");
 
-		// upload_file() only creates the File record — it does NOT set the
-		// field on the ticket itself (that only happens if an existing
-		// file's is_private flag changes, not on a fresh upload), so the
-		// returned file_url still has to be saved onto the doc explicitly,
-		// same embed-full-doc-and-save pattern as the description field.
 		fetch("/api/method/upload_file", {
 			method: "POST",
 			headers: { "X-Frappe-CSRF-Token": frappe.csrf_token },
@@ -226,12 +227,15 @@ document.querySelectorAll(".vst-attachment-input").forEach(function (input) {
 				return r.json();
 			})
 			.then(function (data) {
-				var baseDoc = JSON.parse(document.getElementById("vst-doc-data").textContent);
-				baseDoc[fieldname] = data.message.file_url;
 				return frappe.call({
 					type: "POST",
-					method: "frappe.client.save",
-					args: { doc: baseDoc },
+					method: "run_doc_method",
+					args: {
+						dt: "Vendor Support Ticket",
+						dn: "{{ doc.name }}",
+						method: "set_attachment_field",
+						args: { fieldname: fieldname, file_url: data.message.file_url },
+					},
 				});
 			})
 			.then(function () {

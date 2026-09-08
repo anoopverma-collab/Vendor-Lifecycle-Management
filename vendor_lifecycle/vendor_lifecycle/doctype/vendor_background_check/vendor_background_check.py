@@ -5,11 +5,13 @@ import frappe
 from frappe.model.document import Document
 
 from vendor_lifecycle.vendor_lifecycle.stage_sequencing import (
+	enforce_sequential_cancellation,
 	enforce_sequential_creation,
 	force_override_stage,
 	require_no_active_document_for_kyc,
 )
 from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
+	get_disable_reason_for_supplier,
 	get_kyc_vendor_contact,
 	mark_vendor_status_in_progress,
 	resolve_vendor_lifecycle_company_name,
@@ -396,6 +398,7 @@ class VendorBackgroundCheck(Document):
 			)
 
 	def on_cancel(self):
+		enforce_sequential_cancellation(self)
 		# Without this, Frappe's generic "linked document" check
 		# (check_no_back_links_exist) blocks cancelling this Background Check
 		# outright, because its own submitted References still link back to
@@ -411,18 +414,20 @@ class VendorBackgroundCheck(Document):
 	def _revert_disable_if_this_was_the_failed_one(self):
 		# Cancelling this Background Check retracts its own consequences —
 		# if it was the one that disabled the Supplier, that disable should
-		# lift too, unless some *other* still-submitted Background Check
-		# for the same vendor is also Failed (only possible from data that
-		# predates the one-active-Background-Check-per-vendor rule above;
-		# structurally impossible for anything created after it), in which
-		# case the Supplier must stay disabled on that one's account.
+		# lift too, but only if nothing else is currently disabling it.
+		# get_disable_reason_for_supplier() checks across all four stage
+		# doctypes (and already excludes force_overridden records) rather
+		# than just other Background Checks — a same-doctype-only check
+		# would wrongly re-enable a Supplier that a *different* doctype
+		# (e.g. a Failed Compliance Audit) is independently still keeping
+		# disabled, and would also wrongly re-enable on cancelling a
+		# Background Check that was already force-overridden (so was never
+		# the live reason to begin with) if something else also failed
+		# after the override.
 		if self.overall_status != "Failed" or not self.vendor:
 			return
-		other_failed_exists = frappe.db.exists(
-			"Vendor Background Check",
-			{"vendor": self.vendor, "docstatus": 1, "overall_status": "Failed", "name": ["!=", self.name]},
-		)
-		if not other_failed_exists:
+		reason = get_disable_reason_for_supplier(self.vendor)
+		if not reason or reason == {"doctype": self.doctype, "name": self.name}:
 			frappe.db.set_value("Supplier", self.vendor, "disabled", 0)
 
 	def _handle_failed_result(self):

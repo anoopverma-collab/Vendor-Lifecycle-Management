@@ -74,6 +74,20 @@ frappe.ui.form.on("Vendor Sign Off", {
 			});
 		}
 
+		// Offered directly on the failed record itself, not only from the
+		// KYC's own "Create" dropdown — the same server-side exception
+		// (_require_no_active_signoff_unless_failed) that allows a retry
+		// only actually applies once this Sign-off is Submitted and
+		// Failed, so the button only needs to appear then; if some other,
+		// newer Sign-off already exists for this KYC (this one has since
+		// been superseded), the server throws a clear error rather than
+		// silently doing nothing.
+		if (!frm.is_new() && frm.doc.docstatus === 1 && frm.doc.sign_off_failed) {
+			frm.add_custom_button(__("Retry Sign-off"), () => {
+				frappe.new_doc("Vendor Sign Off", { kyc: frm.doc.kyc });
+			});
+		}
+
 		// Only offered once there's something to send to, only while this
 		// is still a draft, and never once marked failed — matches
 		// send_signoff_email()'s own server-side guards.

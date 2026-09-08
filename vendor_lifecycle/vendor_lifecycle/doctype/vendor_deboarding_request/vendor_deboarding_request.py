@@ -174,8 +174,8 @@ class VendorDeboardingRequest(Document):
 		# the vendor is told now, not later when the Checklist disables
 		# them without warning.
 		contact = self._vendor_contact()
-		recipient = contact.get("official_email")
-		if not recipient:
+		recipients = self._notification_recipients(contact)
+		if not recipients:
 			return
 		context = self._email_context()
 		context.update(contact)
@@ -184,12 +184,40 @@ class VendorDeboardingRequest(Document):
 			name=self.name,
 			template_name=DEFAULT_DEBOARDING_REQUEST_APPROVED_EMAIL_TEMPLATE,
 			context=context,
-			recipients=[recipient],
+			recipients=recipients,
 		)
 
 	def _vendor_contact(self):
 		kyc = frappe.db.get_value("Supplier", self.vendor, "vendor_kyc")
 		return get_kyc_vendor_contact(kyc) if kyc else {}
+
+	def _notification_recipients(self, contact):
+		# Two possible sources: the KYC's own Official Email, and the
+		# Supplier's Primary Contact (email_id, kept in sync by ERPNext
+		# core) — a Supplier with no linked KYC (or a KYC missing Official
+		# Email) would otherwise silently never be notified at all, with
+		# no error and no log. Same 3rd-source pattern as Vendor Deboarding
+		# Checklist's own _clearance_recipients(), minus Additional Email
+		# since this doctype has no such field. Deduplicated
+		# case-insensitively in case both sources hold the same address.
+		candidates = [
+			contact.get("official_email"),
+			frappe.db.get_value("Supplier", self.vendor, "email_id") if self.vendor else None,
+		]
+
+		seen = set()
+		recipients = []
+		for email in candidates:
+			email = (email or "").strip()
+			if not email:
+				continue
+			key = email.lower()
+			if key in seen:
+				continue
+			seen.add(key)
+			recipients.append(email)
+
+		return recipients
 
 	def _email_context(self):
 		firm_name = frappe.db.get_value("Supplier", self.vendor, "supplier_name") or self.vendor

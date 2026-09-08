@@ -19,6 +19,8 @@ DEFAULT_SUPPORT_TICKET_RESOLVED_EMAIL_TEMPLATE = "Vendor Support Ticket Resolved
 DEFAULT_SUPPORT_TICKET_REOPENED_EMAIL_TEMPLATE = "Vendor Support Ticket Reopened"
 DEFAULT_SUPPORT_TICKET_ESCALATION_EMAIL_TEMPLATE = "Vendor Support Ticket Escalation"
 
+ATTACHMENT_FIELDS = ("attachment", "attachment_2")
+
 
 class VendorSupportTicket(Document):
 	def before_insert(self):
@@ -112,12 +114,36 @@ class VendorSupportTicket(Document):
 		# before calling this, since there's no server-side undo.
 		if is_internal_user():
 			frappe.throw(frappe._("A ticket can only be closed by the vendor, from the Supplier Portal."))
+		# The portal only shows/requires the rating selector when the
+		# ticket is Resolved — enforced here too (not just client-side),
+		# so a direct API call can't close a Resolved ticket with no
+		# rating on record. resolution_rating may already be set on the
+		# doc from an earlier set_resolution_rating() call, independent
+		# of whatever this particular call passed in.
+		if self.status == "Resolved" and resolution_rating is None and not self.resolution_rating:
+			frappe.throw(frappe._("Rate the resolution before closing this ticket."))
 		self.db_set("status", "Closed")
 		self.db_set("closed_on", now_datetime())
 		self.db_set("closed_by", frappe.session.user)
 		if resolution_rating is not None:
 			self.db_set("resolution_rating", resolution_rating)
 		self.add_comment("Info", frappe._("Closed by the vendor"))
+
+	@frappe.whitelist()
+	def set_attachment_field(self, fieldname, file_url):
+		"""Called by the portal (www/vst_new, www/vst_detail) right after
+		upload_file() — which is itself called with `fieldname` already
+		set, so the File it creates is correctly homed to this field from
+		the start. A plain frappe.client.save() here instead would create
+		a *second* File record for the same upload (Frappe's own
+		Attach-field save-time sync always creates a fresh File rather
+		than recognizing one that's already correctly attached), leaving
+		the first one permanently orphaned — confirmed happening in
+		practice for every attachment on both portal pages. db_set()
+		bypasses that document-save sync path entirely."""
+		if fieldname not in ATTACHMENT_FIELDS:
+			frappe.throw(frappe._("Invalid attachment field."))
+		self.db_set(fieldname, file_url)
 
 	@frappe.whitelist()
 	def reopen_ticket(self):

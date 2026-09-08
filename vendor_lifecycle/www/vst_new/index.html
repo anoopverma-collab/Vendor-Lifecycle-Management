@@ -30,6 +30,16 @@
 		<label>{{ _("Description") }}</label>
 		<textarea class="form-control" name="description" rows="5"></textarea>
 	</div>
+	<div class="row mb-3">
+		<div class="col-sm-6">
+			<label>{{ _("Attachment") }}</label>
+			<input type="file" class="form-control-file" name="attachment">
+		</div>
+		<div class="col-sm-6">
+			<label>{{ _("Attachment 2") }}</label>
+			<input type="file" class="form-control-file" name="attachment_2">
+		</div>
+	</div>
 	<button type="submit" class="btn btn-primary">{{ _("Submit Ticket") }}</button>
 </form>
 {% endblock %}
@@ -52,16 +62,85 @@ document.getElementById("vst-new-form").addEventListener("submit", function (e) 
 		doc.vendor = form.vendor.value;
 	}
 
+	// A brand new ticket has no name yet, and upload_file() needs a real
+	// docname to attach a File against — so the ticket is created first,
+	// with whatever attachments were chosen uploaded against it right
+	// after, same pattern the detail page (vst_detail) uses for attaching
+	// post-creation.
 	frappe.call({
 		type: "POST",
 		method: "frappe.client.insert",
 		args: { doc: doc },
 		callback: function (r) {
-			if (r.message) {
-				window.location.href = "/vendor-support-tickets/" + encodeURIComponent(r.message.name);
-			} else {
+			if (!r.message) {
 				submitBtn.disabled = false;
+				return;
 			}
+			var savedDoc = r.message;
+			var uploads = [];
+			if (form.attachment.files.length) {
+				uploads.push(["attachment", form.attachment.files[0]]);
+			}
+			if (form.attachment_2.files.length) {
+				uploads.push(["attachment_2", form.attachment_2.files[0]]);
+			}
+
+			function uploadNext() {
+				if (!uploads.length) {
+					window.location.href = "/vendor-support-tickets/" + encodeURIComponent(savedDoc.name);
+					return;
+				}
+				var next = uploads.shift();
+				var fieldname = next[0];
+				var file = next[1];
+				var formData = new FormData();
+				formData.append("file", file);
+				formData.append("doctype", "Vendor Support Ticket");
+				formData.append("docname", savedDoc.name);
+				// Passed straight to upload_file() so the File it creates is
+				// homed to this field from the start — avoids ever creating
+				// an orphaned, unattached File that a follow-up document
+				// save would otherwise leave behind (see
+				// set_attachment_field()'s own docstring for why the
+				// follow-up isn't a plain frappe.client.save()).
+				formData.append("fieldname", fieldname);
+				formData.append("is_private", "1");
+
+				fetch("/api/method/upload_file", {
+					method: "POST",
+					headers: { "X-Frappe-CSRF-Token": frappe.csrf_token },
+					body: formData,
+				})
+					.then(function (resp) {
+						if (!resp.ok) {
+							throw new Error("upload failed");
+						}
+						return resp.json();
+					})
+					.then(function (data) {
+						return frappe.call({
+							type: "POST",
+							method: "run_doc_method",
+							args: {
+								dt: "Vendor Support Ticket",
+								dn: savedDoc.name,
+								method: "set_attachment_field",
+								args: { fieldname: fieldname, file_url: data.message.file_url },
+							},
+						});
+					})
+					.then(function () {
+						uploadNext();
+					})
+					.catch(function () {
+						// Ticket already exists at this point — don't block
+						// on a failed attachment, just take the vendor to
+						// it so they can retry the attachment from there.
+						window.location.href = "/vendor-support-tickets/" + encodeURIComponent(savedDoc.name);
+					});
+			}
+
+			uploadNext();
 		},
 		error: function () {
 			submitBtn.disabled = false;

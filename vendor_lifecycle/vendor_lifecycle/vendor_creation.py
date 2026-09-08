@@ -417,9 +417,11 @@ def validate_supplier_vendor_kyc(doc, method=None):
 # Supplier normally has exactly one of these, but "Enforce Sequential
 # Stages" being off makes more than one theoretically possible; showing
 # the latest stage's failure is the most likely to actually be the
-# current, actionable reason.
+# current, actionable reason. Vendor Sign Off is NOT in this list — see
+# get_disable_reason_for_supplier()'s own handling of it below, since
+# (unlike these three) more than one submitted Sign Off can legitimately
+# exist per vendor at once (a Failed one kept for history, plus a retry).
 DISABLE_REASON_SOURCES = [
-	("Vendor Sign Off", {"sign_off_failed": 1}),
 	# force_overridden: 0 — an overridden result is no longer a live reason
 	# the Supplier is (or should stay) disabled; see force_override() on
 	# each of these three doctypes.
@@ -436,6 +438,23 @@ def get_disable_reason_for_supplier(supplier):
 	cancelled (see each doctype's own _revert_disable_if_this_was_the_
 	failed_one / _revert_vendor_status_to_last_completed_stage). Returns
 	whichever submitted record is responsible, if any."""
+	# Sign Off is checked first (latest stage = most likely current
+	# reason, same as the DISABLE_REASON_SOURCES ordering below), but by
+	# its MOST RECENT submitted record only — a vendor can have an old
+	# Failed Sign Off retried by a newer one, and only the newer one's
+	# own outcome should ever count as a live reason. A plain "does any
+	# Failed Sign Off exist" filter would keep blaming a superseded,
+	# already-retried failure forever.
+	latest_sign_off = frappe.db.get_value(
+		"Vendor Sign Off",
+		{"vendor": supplier, "docstatus": 1},
+		["name", "sign_off_failed"],
+		as_dict=True,
+		order_by="creation desc",
+	)
+	if latest_sign_off and latest_sign_off.sign_off_failed:
+		return {"doctype": "Vendor Sign Off", "name": latest_sign_off.name}
+
 	for doctype, filters in DISABLE_REASON_SOURCES:
 		name = frappe.db.get_value(doctype, {"vendor": supplier, "docstatus": 1, **filters}, "name")
 		if name:

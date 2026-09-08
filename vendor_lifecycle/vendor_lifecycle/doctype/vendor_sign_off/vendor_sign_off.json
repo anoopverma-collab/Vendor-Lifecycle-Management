@@ -9,6 +9,7 @@
   "kyc",
   "vendor",
   "onboarding_request",
+  "previous_failed_sign_off",
   "supplier_email",
   "additional_email",
   "contact_person_name",
@@ -53,6 +54,15 @@
    "fieldtype": "Link",
    "label": "Vendor Onboarding Request",
    "options": "Vendor Onboarding Request",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.previous_failed_sign_off",
+   "description": "The earlier Sign-off that failed, which this one is retrying.",
+   "fieldname": "previous_failed_sign_off",
+   "fieldtype": "Link",
+   "label": "Retry Of (Failed Sign-off)",
+   "options": "Vendor Sign Off",
    "read_only": 1
   },
   {
@@ -183,7 +193,7 @@
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2026-09-05 12:00:00.000000",
+ "modified": "2026-09-08 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Vendor Lifecycle",
  "name": "Vendor Sign Off",

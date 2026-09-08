@@ -100,15 +100,27 @@ def _handle_signoff_reply(doc):
 		return
 
 	if not _sender_is_verified(doc.sender, sign_off):
+		# Same idempotency guard as the "forward, not a reply" case above —
+		# on_update fires every time this Communication is saved, not just
+		# once, so without this a single rejected reply logs a duplicate
+		# comment on every re-save (confirmed happening in practice on the
+		# sibling Deboarding Checklist mechanism, same underlying gap).
+		already_noted = frappe.db.exists("Comment", {
+			"reference_doctype": "Vendor Sign Off",
+			"reference_name": sign_off.name,
+			"content": ["like", f"%{doc.name}%"],
+		})
+		if already_noted:
+			return
 		frappe.get_doc({
 			"doctype": "Comment",
 			"comment_type": "Comment",
 			"reference_doctype": "Vendor Sign Off",
 			"reference_name": sign_off.name,
 			"content": frappe._(
-				"Ignored a reply from an unverified sender ({0}) — it does not match the Supplier Email or"
-				" Additional Email on this Sign-off."
-			).format(doc.sender),
+				"Ignored a reply ({0}) from an unverified sender ({1}) — it does not match the Supplier Email"
+				" or Additional Email on this Sign-off."
+			).format(doc.name, doc.sender),
 		}).insert(ignore_permissions=True)
 		return
 

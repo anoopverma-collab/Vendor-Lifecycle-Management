@@ -5,11 +5,13 @@ import frappe
 from frappe.model.document import Document
 
 from vendor_lifecycle.vendor_lifecycle.stage_sequencing import (
+	enforce_sequential_cancellation,
 	enforce_sequential_creation,
 	force_override_stage,
 	require_no_active_document_for_kyc,
 )
 from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
+	get_disable_reason_for_supplier,
 	get_kyc_vendor_contact,
 	mark_vendor_status_in_progress,
 	resolve_vendor_lifecycle_company_name,
@@ -221,14 +223,17 @@ class VendorSamplingEvaluation(Document):
 		force_override_stage(self, reason)
 
 	def on_cancel(self):
+		enforce_sequential_cancellation(self)
 		self._revert_disable_if_this_was_the_rejected_one()
 
 	def _revert_disable_if_this_was_the_rejected_one(self):
+		# Checks the actual current disable reason across all four stage
+		# doctypes (get_disable_reason_for_supplier, which also excludes
+		# force_overridden records) instead of just other Sampling
+		# Evaluations — see Vendor Background Check's own same-named
+		# method for the full reasoning.
 		if self.evaluation_outcome != "Rejected" or not self.vendor:
 			return
-		other_rejected_exists = frappe.db.exists(
-			"Vendor Sampling Evaluation",
-			{"vendor": self.vendor, "docstatus": 1, "evaluation_outcome": "Rejected", "name": ["!=", self.name]},
-		)
-		if not other_rejected_exists:
+		reason = get_disable_reason_for_supplier(self.vendor)
+		if not reason or reason == {"doctype": self.doctype, "name": self.name}:
 			frappe.db.set_value("Supplier", self.vendor, "disabled", 0)

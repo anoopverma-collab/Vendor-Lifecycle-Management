@@ -271,7 +271,15 @@ frappe.ui.form.on("Vendor KYC", {
 		frm.call("get_available_stages").then((r) => {
 			const result = r.message || {};
 			for (const doctype of result.stages || []) {
-				frm.add_custom_button(__(stage_labels[doctype]), () => {
+				// Sign-off is the only stage that can be offered a second
+				// time (after a genuine Failed outcome, without cancelling
+				// it first) — label it distinctly so it's clear this is a
+				// retry, not a first attempt.
+				const label =
+					doctype === "Vendor Sign Off" && result.sign_off_is_retry
+						? __("Retry Sign-off")
+						: __(stage_labels[doctype]);
+				frm.add_custom_button(label, () => {
 					frappe.new_doc(doctype, { kyc: frm.doc.name });
 				}, __("Create"));
 			}

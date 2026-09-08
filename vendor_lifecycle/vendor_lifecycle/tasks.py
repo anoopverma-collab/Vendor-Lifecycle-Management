@@ -53,6 +53,13 @@ def create_pending_satisfaction_surveys():
 		if vendor.last_satisfaction_survey_date and getdate(vendor.last_satisfaction_survey_date) >= getdate(cutoff):
 			continue
 
+		# Per-vendor savepoint — a bare frappe.db.rollback() here would
+		# undo every survey already inserted earlier in this same loop,
+		# not just this vendor's own failed attempt (this actually
+		# happened: one bad vendor silently erased every good survey
+		# created before it in the same run, while this function still
+		# reported them all as created).
+		frappe.db.savepoint("satisfaction_survey_creation")
 		try:
 			doc = frappe.get_doc({
 				"doctype": "Vendor Satisfaction Survey",
@@ -66,7 +73,7 @@ def create_pending_satisfaction_surveys():
 			# — skip it rather than let one vendor's missing template abort
 			# survey creation for every other vendor in this run.
 			frappe.log_error(title="Satisfaction survey skipped: no Rating Template", message=vendor.name)
-			frappe.db.rollback()
+			frappe.db.rollback(save_point="satisfaction_survey_creation")
 
 	return created
 

@@ -83,15 +83,28 @@ def _handle_checklist_clearance_reply(doc):
 		return
 
 	if not _sender_is_verified(doc.sender, checklist):
+		# Same idempotency guard as the "forward, not a reply" and "more
+		# than one attachment" cases below — on_update fires every time
+		# this Communication is saved, not just once, so without this a
+		# single rejected reply logs a duplicate comment on every re-save
+		# (confirmed happening in practice: the same rejection was logged
+		# twice for one inbound email).
+		already_noted = frappe.db.exists("Comment", {
+			"reference_doctype": "Vendor Deboarding Checklist",
+			"reference_name": checklist.name,
+			"content": ["like", f"%{doc.name}%"],
+		})
+		if already_noted:
+			return
 		frappe.get_doc({
 			"doctype": "Comment",
 			"comment_type": "Comment",
 			"reference_doctype": "Vendor Deboarding Checklist",
 			"reference_name": checklist.name,
 			"content": frappe._(
-				"Ignored a reply from an unverified sender ({0}) — it does not match the Supplier's contact"
-				" email or Additional Email on this Checklist."
-			).format(doc.sender),
+				"Ignored a reply ({0}) from an unverified sender ({1}) — it does not match the Supplier's"
+				" contact email or Additional Email on this Checklist."
+			).format(doc.name, doc.sender),
 		}).insert(ignore_permissions=True)
 		return
 
@@ -162,13 +175,13 @@ def _handle_checklist_clearance_reply(doc):
 
 
 def _sender_is_verified(sender, checklist):
+	# Reuses _clearance_recipients() itself, rather than its own separate
+	# list of sources — anyone the clearance email actually went out to
+	# (KYC Official Email, Supplier Primary Contact, or Additional Email)
+	# must also be recognised as a verified sender when they reply, or a
+	# legitimate recipient's reply gets wrongly rejected as unverified.
 	if not sender:
 		return False
 	sender = sender.strip().lower()
-	contact = checklist.vendor_contact()
-	candidates = {
-		(contact.get("official_email") or "").strip().lower(),
-		(checklist.additional_email or "").strip().lower(),
-	}
-	candidates.discard("")
+	candidates = {email.strip().lower() for email in checklist._clearance_recipients()}
 	return sender in candidates

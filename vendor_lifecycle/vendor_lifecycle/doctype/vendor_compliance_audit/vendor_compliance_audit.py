@@ -7,11 +7,13 @@ import frappe
 from frappe.model.document import Document
 
 from vendor_lifecycle.vendor_lifecycle.stage_sequencing import (
+	enforce_sequential_cancellation,
 	enforce_sequential_creation,
 	force_override_stage,
 	require_no_active_document_for_kyc,
 )
 from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
+	get_disable_reason_for_supplier,
 	get_kyc_vendor_contact,
 	mark_vendor_status_in_progress,
 	resolve_vendor_lifecycle_company_name,
@@ -635,21 +637,20 @@ class VendorComplianceAudit(Document):
 		force_override_stage(self, reason)
 
 	def on_cancel(self):
+		enforce_sequential_cancellation(self)
 		self._revert_disable_if_this_was_the_failed_one()
 
 	def _revert_disable_if_this_was_the_failed_one(self):
 		# Same treatment as Vendor Background Check's own
-		# _revert_disable_if_this_was_the_failed_one — cancelling this Audit
-		# retracts its own consequences, unless some *other* still-submitted
-		# Compliance Audit for the same vendor is also Failed (only possible
-		# from data predating the one-active-Compliance-Audit-per-vendor
-		# rule), in which case the Supplier must stay disabled on that
-		# one's account.
+		# _revert_disable_if_this_was_the_failed_one — checks the actual
+		# current disable reason across all four stage doctypes (and
+		# excludes force_overridden records) rather than just other
+		# Compliance Audits, so cancelling this one never wrongly
+		# re-enables a Supplier a different doctype is still keeping
+		# disabled, and never wrongly re-enables on cancelling an
+		# already-overridden Audit.
 		if self.outcome != "Failed" or not self.vendor:
 			return
-		other_failed_exists = frappe.db.exists(
-			"Vendor Compliance Audit",
-			{"vendor": self.vendor, "docstatus": 1, "outcome": "Failed", "name": ["!=", self.name]},
-		)
-		if not other_failed_exists:
+		reason = get_disable_reason_for_supplier(self.vendor)
+		if not reason or reason == {"doctype": self.doctype, "name": self.name}:
 			frappe.db.set_value("Supplier", self.vendor, "disabled", 0)

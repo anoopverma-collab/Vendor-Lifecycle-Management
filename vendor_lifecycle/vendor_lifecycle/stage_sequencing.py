@@ -161,6 +161,29 @@ def enforce_sequential_creation(doc):
 	frappe.throw(frappe._("A submitted {0} is required before starting {1}.").format(prior_doctype, doc.doctype))
 
 
+def enforce_sequential_cancellation(doc):
+	"""Call from on_cancel() on any of the four onboarding stage doctypes
+	(Background Check, Compliance Audit, Sampling Evaluation, Sign Off),
+	before any other on_cancel side effect. Mirrors enforce_sequential_
+	creation()'s own ordering — creation is already blocked out of order,
+	but cancellation had no equivalent check at all, so a stage could be
+	cancelled while a later stage was still submitted for the same KYC,
+	leaving a hole in the middle of the vendor's stage history with
+	nothing to detect or prevent it."""
+	names = [name for name, _setting in STAGE_SEQUENCE]
+	if doc.doctype not in names or not doc.kyc:
+		return
+
+	for later_doctype in names[names.index(doc.doctype) + 1 :]:
+		existing = frappe.db.get_value(later_doctype, {"kyc": doc.kyc, "docstatus": 1}, "name")
+		if existing:
+			frappe.throw(
+				frappe._(
+					"Cancel {0} ({1}) first — it was created after this {2}, for the same Vendor KYC."
+				).format(later_doctype, existing, doc.doctype)
+			)
+
+
 @frappe.whitelist()
 def get_available_stages(kyc):
 	"""Which of the stages after Vendor KYC can currently be created for
@@ -188,19 +211,20 @@ def get_available_stages(kyc):
 	if frappe.db.exists(
 		"Vendor Background Check", {"kyc": kyc, "docstatus": 1, "overall_status": "Failed", "force_overridden": 0}
 	):
-		return {"stages": [], "background_check_failed": True, "compliance_audit_failed": False, "sampling_evaluation_rejected": False}
+		return {"stages": [], "background_check_failed": True, "compliance_audit_failed": False, "sampling_evaluation_rejected": False, "sign_off_is_retry": False}
 	if frappe.db.exists(
 		"Vendor Compliance Audit", {"kyc": kyc, "docstatus": 1, "outcome": "Failed", "force_overridden": 0}
 	):
-		return {"stages": [], "background_check_failed": False, "compliance_audit_failed": True, "sampling_evaluation_rejected": False}
+		return {"stages": [], "background_check_failed": False, "compliance_audit_failed": True, "sampling_evaluation_rejected": False, "sign_off_is_retry": False}
 	if frappe.db.exists(
 		"Vendor Sampling Evaluation",
 		{"kyc": kyc, "docstatus": 1, "evaluation_outcome": "Rejected", "force_overridden": 0},
 	):
-		return {"stages": [], "background_check_failed": False, "compliance_audit_failed": False, "sampling_evaluation_rejected": True}
+		return {"stages": [], "background_check_failed": False, "compliance_audit_failed": False, "sampling_evaluation_rejected": True, "sign_off_is_retry": False}
 
 	settings = frappe.get_single("Vendor Lifecycle Settings")
 	available = []
+	sign_off_is_retry = False
 
 	for i, (doctype, _mandatory_setting) in enumerate(STAGE_SEQUENCE):
 		if doctype == "Vendor KYC":
@@ -209,8 +233,22 @@ def get_available_stages(kyc):
 		# Only one of each stage is ever allowed per vendor at a time (see
 		# require_no_active_document_for_kyc) — a draft one already blocks
 		# creating another, so it must stop being offered here too, not
-		# just once one is submitted.
-		if frappe.db.exists(doctype, {"kyc": kyc, "docstatus": ["in", [0, 1]]}):
+		# just once one is submitted. Vendor Sign Off is the one
+		# exception (see _require_no_active_signoff_unless_failed on
+		# Vendor Sign Off itself): a Submitted-and-Failed one doesn't
+		# block a retry there, so it must not read as "already done"
+		# here either — otherwise the KYC's own Create button would
+		# never offer a retry the doctype itself already allows.
+		if doctype == "Vendor Sign Off":
+			has_failed_sign_off = frappe.db.exists(doctype, {"kyc": kyc, "docstatus": 1, "sign_off_failed": 1})
+			blocked = frappe.db.exists(doctype, {"kyc": kyc, "docstatus": 0}) or frappe.db.exists(
+				doctype, {"kyc": kyc, "docstatus": 1, "sign_off_failed": ["!=", 1]}
+			)
+			if not blocked and has_failed_sign_off:
+				sign_off_is_retry = True
+		else:
+			blocked = frappe.db.exists(doctype, {"kyc": kyc, "docstatus": ["in", [0, 1]]})
+		if blocked:
 			continue  # already done
 
 		requirement = _nearest_requirement(kyc, STAGE_SEQUENCE[:i], settings)
@@ -222,6 +260,7 @@ def get_available_stages(kyc):
 		"background_check_failed": False,
 		"compliance_audit_failed": False,
 		"sampling_evaluation_rejected": False,
+		"sign_off_is_retry": sign_off_is_retry,
 	}
 
 

@@ -14,9 +14,9 @@ from vendor_lifecycle.vendor_lifecycle.doctype.vendor_sampling_evaluation.vendor
 	VENDOR_LIFECYCLE_STATUS_SAMPLING_APPROVED,
 )
 from vendor_lifecycle.vendor_lifecycle.stage_sequencing import (
+	enforce_sequential_cancellation,
 	enforce_sequential_creation,
 	is_sampling_mandatory,
-	require_no_active_document_for_kyc,
 	stage_requirement_satisfied,
 )
 from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
@@ -88,12 +88,42 @@ class VendorSignOff(Document):
 		return self.company or frappe.defaults.get_global_default("company")
 
 	def before_insert(self):
-		require_no_active_document_for_kyc(self)
+		self._require_no_active_signoff_unless_failed()
 		# Not currently consumed anywhere (the Web Form that used this was
 		# removed — see git history) — kept as a stable per-document secret
 		# in case a future vendor-facing mechanism needs one again, so it
 		# doesn't have to be reintroduced from scratch.
 		self.upload_token = frappe.generate_hash(length=32)
+
+	def _require_no_active_signoff_unless_failed(self):
+		# Sign-off's own version of require_no_active_document_for_kyc() —
+		# every other stage doctype still uses the shared one unchanged.
+		# Sign-off is the exception: a genuine Failed outcome should be
+		# retryable without first cancelling the failed record (cancelling
+		# would erase the audit trail of what actually happened on the
+		# first attempt). A Draft, or a Submitted-and-Passed Sign-off,
+		# still blocks a second one exactly like before — only
+		# Submitted-and-Failed is the allowed exception, and the new
+		# record links back to the one it's retrying.
+		if not self.kyc:
+			return
+		existing = frappe.db.get_value(
+			"Vendor Sign Off",
+			{"kyc": self.kyc, "docstatus": ["in", [0, 1]]},
+			["name", "docstatus", "sign_off_failed"],
+			as_dict=True,
+		)
+		if not existing:
+			return
+		if existing.docstatus == 1 and existing.sign_off_failed:
+			self.previous_failed_sign_off = existing.name
+			return
+		frappe.throw(
+			frappe._(
+				"A Vendor Sign Off already exists for this vendor (draft, or submitted and not failed) —"
+				" cancel it before creating another."
+			)
+		)
 
 	def before_submit(self):
 		if self.sign_off_failed:
@@ -553,6 +583,7 @@ class VendorSignOff(Document):
 		comm.send_email()
 
 	def on_cancel(self):
+		enforce_sequential_cancellation(self)  # no-op today — Sign Off is the last stage
 		if self.sign_off_failed:
 			self._revert_disable_if_this_was_the_failed_one()
 		else:
