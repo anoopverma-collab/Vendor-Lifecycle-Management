@@ -18,8 +18,16 @@
  ],
  "charts": [
   {
-   "chart": "Deboarding Requests by Status",
+   "chart": "Deboarding Requests Trend",
    "width": "Full"
+  },
+  {
+   "chart": "Deboarding Requests by Status",
+   "width": "Half"
+  },
+  {
+   "chart": "Deboarding Requests by Resolvability",
+   "width": "Half"
   }
  ],
  "creation": "2026-09-06 00:00:00.000000",
@@ -29,7 +37,7 @@
  "idx": 0,
  "is_default": 0,
  "is_standard": 1,
- "modified": "2026-09-06 00:00:00.000000",
+ "modified": "2026-09-08 19:00:00.000000",
  "modified_by": "Administrator",
  "module": "Vendor Lifecycle",
  "name": "Vendor Deboarding",
