@@ -1,39 +1,45 @@
 {% extends "templates/web.html" %}
 
-{% block page_content %}
-<h2 class="mb-3">{{ _("Satisfaction Surveys") }}</h2>
+{% block style %}
+<link rel="stylesheet" href="/assets/vendor_lifecycle/css/vendor_portal.css">
+{% endblock %}
 
-{% if surveys %}
-<div class="table-responsive">
-	<table class="table">
-		<thead>
-			<tr>
-				<th>{{ _("Period") }}</th>
-				<th>{{ _("Survey Date") }}</th>
-				<th>{{ _("Status") }}</th>
-				<th></th>
-			</tr>
-		</thead>
-		<tbody>
-			{% set badge_class = {
-				"Open": "secondary",
-				"In Progress": "info",
-				"Ratings Given": "warning",
-				"Completed": "success",
-				"Cancelled": "danger",
-			} %}
-			{% for s in surveys %}
-			<tr>
-				<td>{{ s.period }}</td>
-				<td>{{ s.survey_date }}</td>
-				<td><span class="badge badge-{{ badge_class.get(s.status, 'secondary') }}">{{ _(s.status) }}</span></td>
-				<td><a href="/vendor-satisfaction-surveys/{{ s.name }}">{{ _("View") }}</a></td>
-			</tr>
-			{% endfor %}
-		</tbody>
-	</table>
+{% block page_content %}
+<div class="vl-portal">
+	<div class="vl-portal-header">
+		<div>
+			<h2>{{ _("Satisfaction Surveys") }}</h2>
+			<p class="vl-subtitle">{{ _("Periodic surveys sent about your engagement as a vendor.") }}</p>
+		</div>
+	</div>
+
+	{% if surveys %}
+	{% set badge_class = {
+		"Open": "neutral",
+		"In Progress": "progress",
+		"Ratings Given": "warning",
+		"Completed": "success",
+		"Cancelled": "danger",
+	} %}
+	<div class="vl-list">
+		{% for s in surveys %}
+		<a class="vl-list-item" href="/vendor-satisfaction-surveys/{{ s.name }}">
+			<div class="vl-list-item-main">
+				<div class="vl-list-item-title">{{ s.period }}</div>
+				<div class="vl-list-item-meta">
+					<span>{{ s.name }}</span>
+					<span>{{ _("Survey Date") }}: {{ s.survey_date }}</span>
+				</div>
+			</div>
+			<div class="vl-list-item-side">
+				<span class="vl-badge vl-badge-{{ badge_class.get(s.status, 'neutral') }}">{{ _(s.status) }}</span>
+				<span class="vl-list-item-arrow">&rsaquo;</span>
+			</div>
+		</a>
+		{% endfor %}
+	</div>
+	{% else %}
+	<div class="vl-empty">{{ _("No surveys yet.") }}</div>
+	{% endif %}
 </div>
-{% else %}
-<p class="text-muted">{{ _("No surveys yet.") }}</p>
-{% endif %}
 {% endblock %}

@@ -1,47 +1,62 @@
 {% extends "templates/web.html" %}
 
+{% block style %}
+<link rel="stylesheet" href="/assets/vendor_lifecycle/css/vendor_portal.css">
+{% endblock %}
+
 {% block page_content %}
-<h2>{{ _("New Support Ticket") }}</h2>
-<form id="vst-new-form">
-	{% if vendors|length > 1 %}
-	<div class="form-group mb-3">
-		<label>{{ _("Vendor Account") }}</label>
-		<select class="form-control" name="vendor" required>
-			<option value="">{{ _("Select...") }}</option>
-			{% for v in vendors %}
-			<option value="{{ v }}">{{ v }}</option>
-			{% endfor %}
-		</select>
-	</div>
-	{% endif %}
-	<div class="form-group mb-3">
-		<label>{{ _("Subject") }}</label>
-		<input type="text" class="form-control" name="subject" required>
-	</div>
-	<div class="form-group mb-3">
-		<label>{{ _("Priority") }}</label>
-		<select class="form-control" name="priority">
-			<option value="Low">{{ _("Low") }}</option>
-			<option value="Medium" selected>{{ _("Medium") }}</option>
-			<option value="High">{{ _("High") }}</option>
-		</select>
-	</div>
-	<div class="form-group mb-3">
-		<label>{{ _("Description") }}</label>
-		<textarea class="form-control" name="description" rows="5"></textarea>
-	</div>
-	<div class="row mb-3">
-		<div class="col-sm-6">
-			<label>{{ _("Attachment") }}</label>
-			<input type="file" class="form-control-file" name="attachment">
-		</div>
-		<div class="col-sm-6">
-			<label>{{ _("Attachment 2") }}</label>
-			<input type="file" class="form-control-file" name="attachment_2">
+<div class="vl-portal">
+	<a class="vl-back-link" href="/vendor-support-tickets">&lsaquo; {{ _("Back to Support Tickets") }}</a>
+	<div class="vl-portal-header">
+		<div>
+			<h2>{{ _("New Support Ticket") }}</h2>
+			<p class="vl-subtitle">{{ _("Describe the issue and we'll get back to you.") }}</p>
 		</div>
 	</div>
-	<button type="submit" class="btn btn-primary">{{ _("Submit Ticket") }}</button>
-</form>
+
+	<div class="vl-form-card">
+		<form id="vst-new-form">
+			{% if vendors|length > 1 %}
+			<div class="form-group mb-3">
+				<label>{{ _("Vendor Account") }}</label>
+				<select class="form-control" name="vendor" required>
+					<option value="">{{ _("Select...") }}</option>
+					{% for v in vendors %}
+					<option value="{{ v }}">{{ v }}</option>
+					{% endfor %}
+				</select>
+			</div>
+			{% endif %}
+			<div class="form-group mb-3">
+				<label>{{ _("Subject") }}</label>
+				<input type="text" class="form-control" name="subject" required>
+			</div>
+			<div class="form-group mb-3">
+				<label>{{ _("Priority") }}</label>
+				<select class="form-control" name="priority">
+					<option value="Low">{{ _("Low") }}</option>
+					<option value="Medium" selected>{{ _("Medium") }}</option>
+					<option value="High">{{ _("High") }}</option>
+				</select>
+			</div>
+			<div class="form-group mb-3">
+				<label>{{ _("Description") }}</label>
+				<textarea class="form-control" name="description" rows="5"></textarea>
+			</div>
+			<div class="row mb-3">
+				<div class="col-sm-6">
+					<label>{{ _("Attachment") }}</label>
+					<input type="file" class="form-control-file" name="attachment">
+				</div>
+				<div class="col-sm-6">
+					<label>{{ _("Attachment 2") }}</label>
+					<input type="file" class="form-control-file" name="attachment_2">
+				</div>
+			</div>
+			<button type="submit" class="vl-btn vl-btn-primary">{{ _("Submit Ticket") }}</button>
+		</form>
+	</div>
+</div>
 {% endblock %}
 
 {% block script %}

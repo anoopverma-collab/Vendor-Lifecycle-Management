@@ -1,83 +1,95 @@
 {% extends "templates/web.html" %}
 
+{% block style %}
+<link rel="stylesheet" href="/assets/vendor_lifecycle/css/vendor_portal.css">
+{% endblock %}
+
 {% block page_content %}
 {% set badge_class = {
-	"Open": "secondary",
-	"In Progress": "info",
+	"Open": "neutral",
+	"In Progress": "progress",
 	"Ratings Given": "warning",
 	"Completed": "success",
 	"Cancelled": "danger",
 } %}
-<div class="d-flex justify-content-between align-items-center">
-	<h2 class="mb-0">{{ _("Satisfaction Survey") }} — {{ doc.get_formatted("survey_date") }}</h2>
-	<span class="badge badge-{{ badge_class.get(doc.status, 'secondary') }}">{{ _(doc.status) }}</span>
-</div>
-<p class="text-muted">{{ _("Period") }}: {{ doc.period }}</p>
+<div class="vl-portal">
+	<a class="vl-back-link" href="/vendor-satisfaction-surveys">&lsaquo; {{ _("Back to Satisfaction Surveys") }}</a>
 
-{% if is_pending %}
-<script id="vss-doc-data" type="application/json">{{ doc_json }}</script>
-<form id="vss-edit-form">
-	{% if doc.ratings %}
-	<h5>{{ _("Ratings") }}</h5>
-	<table class="table" id="vss-ratings-table">
-		<thead><tr><th>{{ _("Criteria") }}</th><th>{{ _("Score") }}</th></tr></thead>
-		<tbody>
-			{% for r in doc.ratings %}
-			<tr data-row-name="{{ r.name }}">
-				<td>{{ r.criteria }}</td>
-				<td>
-					<select class="form-control vss-score" style="max-width: 150px;">
-						<option value="">{{ _("Not Rated") }}</option>
-						<option value="0.2" {% if r.score == 0.2 %}selected{% endif %}>1</option>
-						<option value="0.4" {% if r.score == 0.4 %}selected{% endif %}>2</option>
-						<option value="0.6" {% if r.score == 0.6 %}selected{% endif %}>3</option>
-						<option value="0.8" {% if r.score == 0.8 %}selected{% endif %}>4</option>
-						<option value="1.0" {% if r.score == 1.0 %}selected{% endif %}>5</option>
-					</select>
-				</td>
-			</tr>
-			{% endfor %}
-		</tbody>
-	</table>
-	{% endif %}
-
-	<div class="row">
-		<div class="form-group mb-3 col-sm-6">
-			<label>{{ _("Areas of Concern") }}</label>
-			<textarea class="form-control" name="issues" rows="3">{{ doc.issues or "" }}</textarea>
+	<div class="vl-detail-card">
+		<div class="vl-detail-card-header">
+			<div>
+				<h3>{{ _("Satisfaction Survey") }} — {{ doc.get_formatted("survey_date") }}</h3>
+				<div class="vl-list-item-meta"><span>{{ _("Period") }}: {{ doc.period }}</span></div>
+			</div>
+			<span class="vl-badge vl-badge-{{ badge_class.get(doc.status, 'neutral') }}">{{ _(doc.status) }}</span>
 		</div>
-		<div class="form-group mb-3 col-sm-6">
-			<label>{{ _("Suggestions for Improvement") }}</label>
-			<textarea class="form-control" name="remarks" rows="3">{{ doc.remarks or "" }}</textarea>
+
+		<div class="vl-detail-card-body">
+			{% if is_pending %}
+			<script id="vss-doc-data" type="application/json">{{ doc_json }}</script>
+			<form id="vss-edit-form">
+				{% if doc.ratings %}
+				<h5>{{ _("Ratings") }}</h5>
+				<table class="table" id="vss-ratings-table">
+					<thead><tr><th>{{ _("Criteria") }}</th><th>{{ _("Score") }}</th></tr></thead>
+					<tbody>
+						{% for r in doc.ratings %}
+						<tr data-row-name="{{ r.name }}">
+							<td>{{ r.criteria }}</td>
+							<td>
+								<select class="form-control vss-score" style="max-width: 150px;">
+									<option value="">{{ _("Not Rated") }}</option>
+									<option value="0.2" {% if r.score == 0.2 %}selected{% endif %}>1</option>
+									<option value="0.4" {% if r.score == 0.4 %}selected{% endif %}>2</option>
+									<option value="0.6" {% if r.score == 0.6 %}selected{% endif %}>3</option>
+									<option value="0.8" {% if r.score == 0.8 %}selected{% endif %}>4</option>
+									<option value="1.0" {% if r.score == 1.0 %}selected{% endif %}>5</option>
+								</select>
+							</td>
+						</tr>
+						{% endfor %}
+					</tbody>
+				</table>
+				{% endif %}
+
+				<div class="row">
+					<div class="form-group mb-3 col-sm-6">
+						<label>{{ _("Areas of Concern") }}</label>
+						<textarea class="form-control" name="issues" rows="3">{{ doc.issues or "" }}</textarea>
+					</div>
+					<div class="form-group mb-3 col-sm-6">
+						<label>{{ _("Suggestions for Improvement") }}</label>
+						<textarea class="form-control" name="remarks" rows="3">{{ doc.remarks or "" }}</textarea>
+					</div>
+				</div>
+				<button type="button" class="vl-btn vl-btn-outline" id="vss-save-btn">{{ _("Save Draft") }}</button>
+				<button type="button" class="vl-btn vl-btn-primary" id="vss-submit-btn">{{ _("Submit Survey") }}</button>
+			</form>
+			{% else %}
+			{% if doc.ratings %}
+			<table class="table">
+				<thead><tr><th>{{ _("Criteria") }}</th><th>{{ _("Score") }}</th></tr></thead>
+				<tbody>
+					{% for r in doc.ratings %}
+					<tr><td>{{ r.criteria }}</td><td>{{ ((r.score or 0) * 5) | round | int }} / 5</td></tr>
+					{% endfor %}
+				</tbody>
+			</table>
+			{% endif %}
+			<div class="row">
+				<div class="col-sm-6">
+					<p class="mb-1"><strong>{{ _("Areas of Concern") }}</strong></p>
+					<p>{{ doc.issues or "-" }}</p>
+				</div>
+				<div class="col-sm-6">
+					<p class="mb-1"><strong>{{ _("Suggestions for Improvement") }}</strong></p>
+					<p>{{ doc.remarks or "-" }}</p>
+				</div>
+			</div>
+			{% endif %}
 		</div>
 	</div>
-	<button type="button" class="btn btn-default" id="vss-save-btn">{{ _("Save Draft") }}</button>
-	<button type="button" class="btn btn-primary" id="vss-submit-btn">{{ _("Submit Survey") }}</button>
-</form>
-{% else %}
-<div class="card p-3">
-	{% if doc.ratings %}
-	<table class="table">
-		<thead><tr><th>{{ _("Criteria") }}</th><th>{{ _("Score") }}</th></tr></thead>
-		<tbody>
-			{% for r in doc.ratings %}
-			<tr><td>{{ r.criteria }}</td><td>{{ ((r.score or 0) * 5) | round | int }} / 5</td></tr>
-			{% endfor %}
-		</tbody>
-	</table>
-	{% endif %}
-	<div class="row">
-		<div class="col-sm-6">
-			<p class="mb-1"><strong>{{ _("Areas of Concern") }}</strong></p>
-			<p>{{ doc.issues or "-" }}</p>
-		</div>
-		<div class="col-sm-6">
-			<p class="mb-1"><strong>{{ _("Suggestions for Improvement") }}</strong></p>
-			<p>{{ doc.remarks or "-" }}</p>
-		</div>
-	</div>
 </div>
-{% endif %}
 {% endblock %}
 
 {% block script %}

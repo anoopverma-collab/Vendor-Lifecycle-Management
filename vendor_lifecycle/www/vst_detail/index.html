@@ -1,111 +1,121 @@
 {% extends "templates/web.html" %}
 
+{% block style %}
+<link rel="stylesheet" href="/assets/vendor_lifecycle/css/vendor_portal.css">
+{% endblock %}
+
 {% block page_content %}
 {% set badge_class = {
-	"Open": "secondary",
-	"In Progress": "info",
+	"Open": "neutral",
+	"In Progress": "progress",
 	"Resolved": "warning",
 	"Reopened": "danger",
 	"Closed": "success",
-	"Invalid": "dark",
+	"Invalid": "neutral",
 } %}
-<div class="card mb-3">
-	<div class="card-body">
-		<div class="d-flex justify-content-between align-items-start flex-wrap">
-			<h3 class="mb-1">{{ doc.subject }}</h3>
+<div class="vl-portal">
+	<a class="vl-back-link" href="/vendor-support-tickets">&lsaquo; {{ _("Back to Support Tickets") }}</a>
+
+	<div class="vl-detail-card">
+		<div class="vl-detail-card-header">
+			<div>
+				<h3>{{ doc.subject }}</h3>
+				<div class="vl-list-item-meta"><span>{{ doc.name }}</span></div>
+			</div>
 			<div class="d-flex align-items-center flex-wrap" style="gap: 8px;">
-				<span class="badge badge-{{ badge_class.get(doc.status, 'secondary') }} px-3 py-2">{{ _(doc.status) }}</span>
+				<span class="vl-badge vl-badge-{{ badge_class.get(doc.status, 'neutral') }}">{{ _(doc.status) }}</span>
 				{% if doc.status in ("Resolved", "Invalid") %}
-				<button class="btn btn-danger btn-sm" id="vst-reopen-btn">{{ _("Not Fixed — Reopen") if doc.status == "Resolved" else _("Reopen This Ticket") }}</button>
+				<button class="vl-btn vl-btn-outline vl-btn-sm" id="vst-reopen-btn" style="border-color: var(--vl-danger); color: var(--vl-danger);">{{ _("Not Fixed — Reopen") if doc.status == "Resolved" else _("Reopen This Ticket") }}</button>
 				{% endif %}
 				{% if doc.status != "Closed" %}
 				<!-- Shown for as long as the ticket isn't Closed — the
 				     server side (close_ticket) still requires Resolved
 				     first and gives a clear error otherwise; once closed
 				     it's final and this disappears. -->
-				<button class="btn btn-primary btn-sm" id="vst-close-btn">{{ _("Close Ticket") }}</button>
+				<button class="vl-btn vl-btn-primary vl-btn-sm" id="vst-close-btn">{{ _("Close Ticket") }}</button>
 				{% endif %}
 			</div>
 		</div>
-		<div class="text-muted small mb-3">{{ doc.name }}</div>
 
-		<div class="row">
-			<div class="col-sm-4 mb-2">
-				<div class="text-muted small text-uppercase">{{ _("Priority") }}</div>
-				<div>{{ doc.priority }}</div>
-			</div>
-			<div class="col-sm-4 mb-2">
-				<div class="text-muted small text-uppercase">{{ _("Opened") }}</div>
-				<div>{{ doc.get_formatted("opened_on") }}</div>
-			</div>
-			{% if doc.status == "Resolved" %}
-			<div class="col-sm-4 mb-2">
-				<div class="text-muted small text-uppercase">{{ _("Rate the Resolution") }}</div>
-				<select id="vst-rating" class="form-control form-control-sm">
-					<option value="" {% if not doc.resolution_rating %}selected{% endif %}>{{ _("Select...") }}</option>
-					<option value="0.2" {% if doc.resolution_rating == 0.2 %}selected{% endif %}>{{ _("1 star") }}</option>
-					<option value="0.4" {% if doc.resolution_rating == 0.4 %}selected{% endif %}>{{ _("2 stars") }}</option>
-					<option value="0.6" {% if doc.resolution_rating == 0.6 %}selected{% endif %}>{{ _("3 stars") }}</option>
-					<option value="0.8" {% if doc.resolution_rating == 0.8 %}selected{% endif %}>{{ _("4 stars") }}</option>
-					<option value="1.0" {% if doc.resolution_rating == 1.0 %}selected{% endif %}>{{ _("5 stars") }}</option>
-				</select>
-			</div>
-			{% endif %}
-			{% if doc.closed_on %}
-			<div class="col-sm-4 mb-2">
-				<div class="text-muted small text-uppercase">{{ _("Closed") }}</div>
-				<div>{{ doc.get_formatted("closed_on") }}</div>
-			</div>
-			{% endif %}
-		</div>
-
-		<hr class="my-3">
-
-		<div class="row">
-			<div class="col-sm-{{ '6' if doc.resolution else '12' }}">
-				<div class="text-muted small text-uppercase mb-1">{{ _("Issue") }}</div>
-				{% if can_edit_description %}
-				<script id="vst-doc-data" type="application/json">{{ doc_json }}</script>
-				<textarea class="form-control mb-2" id="vst-description" rows="4">{{ doc.description or "" }}</textarea>
-				<button class="btn btn-sm btn-primary" id="vst-save-description-btn">{{ _("Save") }}</button>
-				{% else %}
-				<div>{{ doc.description or "-" }}</div>
+		<div class="vl-detail-card-body">
+			<div class="row">
+				<div class="col-sm-4 mb-2">
+					<div class="text-muted small text-uppercase">{{ _("Priority") }}</div>
+					<div>{{ doc.priority }}</div>
+				</div>
+				<div class="col-sm-4 mb-2">
+					<div class="text-muted small text-uppercase">{{ _("Opened") }}</div>
+					<div>{{ doc.get_formatted("opened_on") }}</div>
+				</div>
+				{% if doc.status == "Resolved" %}
+				<div class="col-sm-4 mb-2">
+					<div class="text-muted small text-uppercase">{{ _("Rate the Resolution") }}</div>
+					<select id="vst-rating" class="form-control form-control-sm">
+						<option value="" {% if not doc.resolution_rating %}selected{% endif %}>{{ _("Select...") }}</option>
+						<option value="0.2" {% if doc.resolution_rating == 0.2 %}selected{% endif %}>{{ _("1 star") }}</option>
+						<option value="0.4" {% if doc.resolution_rating == 0.4 %}selected{% endif %}>{{ _("2 stars") }}</option>
+						<option value="0.6" {% if doc.resolution_rating == 0.6 %}selected{% endif %}>{{ _("3 stars") }}</option>
+						<option value="0.8" {% if doc.resolution_rating == 0.8 %}selected{% endif %}>{{ _("4 stars") }}</option>
+						<option value="1.0" {% if doc.resolution_rating == 1.0 %}selected{% endif %}>{{ _("5 stars") }}</option>
+					</select>
+				</div>
 				{% endif %}
+				{% if doc.closed_on %}
+				<div class="col-sm-4 mb-2">
+					<div class="text-muted small text-uppercase">{{ _("Closed") }}</div>
+					<div>{{ doc.get_formatted("closed_on") }}</div>
+				</div>
+				{% endif %}
+			</div>
 
-				<div class="row mt-3">
-					<div class="col-sm-6">
-						<div class="text-muted small text-uppercase mb-1">{{ _("Attachment") }}</div>
-						{% if doc.attachment %}
-						<div class="mb-1"><a href="{{ doc.attachment }}" target="_blank" rel="noopener">{{ doc.attachment.split("/") | last }}</a></div>
-						{% endif %}
-						{% if can_edit_description %}
-						<input type="file" class="form-control-file vst-attachment-input" data-fieldname="attachment">
-						{% endif %}
-					</div>
-					<div class="col-sm-6">
-						<div class="text-muted small text-uppercase mb-1">{{ _("Attachment 2") }}</div>
-						{% if doc.attachment_2 %}
-						<div class="mb-1"><a href="{{ doc.attachment_2 }}" target="_blank" rel="noopener">{{ doc.attachment_2.split("/") | last }}</a></div>
-						{% endif %}
-						{% if can_edit_description %}
-						<input type="file" class="form-control-file vst-attachment-input" data-fieldname="attachment_2">
-						{% endif %}
+			<hr class="my-3">
+
+			<div class="row">
+				<div class="col-sm-{{ '6' if doc.resolution else '12' }}">
+					<div class="text-muted small text-uppercase mb-1">{{ _("Issue") }}</div>
+					{% if can_edit_description %}
+					<script id="vst-doc-data" type="application/json">{{ doc_json }}</script>
+					<textarea class="form-control mb-2" id="vst-description" rows="4">{{ doc.description or "" }}</textarea>
+					<button class="vl-btn vl-btn-primary vl-btn-sm" id="vst-save-description-btn">{{ _("Save") }}</button>
+					{% else %}
+					<div>{{ doc.description or "-" }}</div>
+					{% endif %}
+
+					<div class="row mt-3">
+						<div class="col-sm-6">
+							<div class="text-muted small text-uppercase mb-1">{{ _("Attachment") }}</div>
+							{% if doc.attachment %}
+							<div class="mb-1"><a href="{{ doc.attachment }}" target="_blank" rel="noopener">{{ doc.attachment.split("/") | last }}</a></div>
+							{% endif %}
+							{% if can_edit_description %}
+							<input type="file" class="form-control-file vst-attachment-input" data-fieldname="attachment">
+							{% endif %}
+						</div>
+						<div class="col-sm-6">
+							<div class="text-muted small text-uppercase mb-1">{{ _("Attachment 2") }}</div>
+							{% if doc.attachment_2 %}
+							<div class="mb-1"><a href="{{ doc.attachment_2 }}" target="_blank" rel="noopener">{{ doc.attachment_2.split("/") | last }}</a></div>
+							{% endif %}
+							{% if can_edit_description %}
+							<input type="file" class="form-control-file vst-attachment-input" data-fieldname="attachment_2">
+							{% endif %}
+						</div>
 					</div>
 				</div>
-			</div>
 
-			{% if doc.resolution %}
-			<div class="col-sm-6">
-				<div class="text-muted small text-uppercase mb-1">{{ _("Note") if doc.status == "Invalid" else _("Resolution") }}</div>
-				<!-- Read-only display only — the vendor can never edit
-				     this, regardless of status; only staff set it, via
-				     Mark Resolved / Mark Invalid on the Desk form. -->
-				<div>{{ doc.resolution }}</div>
-				{% if doc.status == "Closed" and doc.resolution_rating %}
-				<div class="text-muted small mt-2">{{ _("Your rating") }}: {{ (doc.resolution_rating * 5) | round | int }} / 5</div>
+				{% if doc.resolution %}
+				<div class="col-sm-6">
+					<div class="text-muted small text-uppercase mb-1">{{ _("Note") if doc.status == "Invalid" else _("Resolution") }}</div>
+					<!-- Read-only display only — the vendor can never edit
+					     this, regardless of status; only staff set it, via
+					     Mark Resolved / Mark Invalid on the Desk form. -->
+					<div>{{ doc.resolution }}</div>
+					{% if doc.status == "Closed" and doc.resolution_rating %}
+					<div class="text-muted small mt-2">{{ _("Your rating") }}: {{ (doc.resolution_rating * 5) | round | int }} / 5</div>
+					{% endif %}
+				</div>
 				{% endif %}
 			</div>
-			{% endif %}
 		</div>
 	</div>
 </div>
