@@ -3,7 +3,7 @@
  "creation": "2026-08-03 14:40:06.931794",
  "docstatus": 0,
  "doctype": "Workspace Sidebar",
- "header_icon": "non-profit",
+ "header_icon": "handshake",
  "idx": 0,
  "items": [
   {
@@ -15,6 +15,18 @@
    "label": "Home",
    "link_to": "Vendor Lifecycle",
    "link_type": "Workspace",
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 1,
+   "icon": "building-2",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Vendor",
+   "link_to": "Supplier",
+   "link_type": "DocType",
    "show_arrow": 0,
    "type": "Link"
   },
@@ -373,7 +385,7 @@
    "type": "Link"
   }
  ],
- "modified": "2026-09-08 18:00:00.000000",
+ "modified": "2026-09-09 17:30:00.000000",
  "modified_by": "Administrator",
  "module": "Vendor Lifecycle",
  "name": "Vendor Lifecycle",

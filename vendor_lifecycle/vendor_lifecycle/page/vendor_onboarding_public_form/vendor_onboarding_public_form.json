@@ -1,0 +1,18 @@
+{
+ "content": null,
+ "creation": "2026-09-09 17:00:00.000000",
+ "docstatus": 0,
+ "doctype": "Page",
+ "idx": 0,
+ "modified": "2026-09-09 17:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "vendor-onboarding-public-form",
+ "owner": "Administrator",
+ "page_name": "vendor-onboarding-public-form",
+ "roles": [],
+ "script": null,
+ "standard": "Yes",
+ "style": null,
+ "title": "Public Onboarding Form"
+}
