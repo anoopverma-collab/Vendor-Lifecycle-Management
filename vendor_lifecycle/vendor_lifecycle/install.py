@@ -592,6 +592,22 @@ def install_vendor_kyc_workflow():
 			"style": style,
 		}).insert(ignore_permissions=True)
 
+	# A fresh site only ships 3 default Workflow Action Master records
+	# (Approve/Reject/Review, seeded by frappe/utils/install.py) - any other
+	# action name, like our own "Send for Approval"/"Cancel", normally only
+	# gets created as a side effect of typing it into the Workflow Builder
+	# UI. Since this Workflow is created here in code, never through that
+	# UI, create whichever ones are missing ourselves first - otherwise the
+	# Workflow Transition rows below fail link validation on a truly fresh
+	# install.
+	actions = {action for _state, action, _next_state, _allowed in VENDOR_KYC_WORKFLOW_TRANSITIONS}
+	for action in actions:
+		if not frappe.db.exists("Workflow Action Master", action):
+			frappe.get_doc({
+				"doctype": "Workflow Action Master",
+				"workflow_action_name": action,
+			}).insert(ignore_permissions=True)
+
 	if frappe.db.exists("Workflow", "Vendor KYC"):
 		workflow = frappe.get_doc("Workflow", "Vendor KYC")
 	else:
