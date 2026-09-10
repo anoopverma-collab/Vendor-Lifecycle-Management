@@ -104,7 +104,30 @@ def rename_insurance_template_doctype():
 
 
 def after_install():
-	sync_standard_files()
+	# `bench install-app` never fires the `after_migrate` hook - that's a
+	# separate hook that only runs during `bench migrate` - so every one of
+	# this app's "create the default X if it's missing" seed functions
+	# (email templates, rating/checklist templates, the Vendor KYC
+	# Workflow, Indian states, etc.) lived only in after_migrate() and
+	# never actually ran on a fresh install by itself, only on whatever
+	# `bench migrate` a site happened to run afterward. Calling it here too
+	# is safe - every one of those functions is already written to be a
+	# no-op if its target already exists - so this just guarantees a fresh
+	# install ends up fully seeded even if the site's own deployment
+	# process never runs `bench migrate` as a separate step.
+	#
+	# frappe.installer.install_app() only fires this after_install hook,
+	# then syncs this app's fixtures/*.json (Role, Custom Field, Property
+	# Setter) *afterward* - so on a genuinely fresh install, the "Vendor
+	# Lifecycle Manager"/"Vendor Lifecycle User" roles the new Vendor KYC
+	# Workflow links to wouldn't exist yet at this point unless fixtures
+	# are synced here first, ahead of after_migrate()'s own seed functions.
+	from frappe.utils.fixtures import sync_fixtures
+
+	sync_fixtures("vendor_lifecycle")
+	# after_migrate() already starts with sync_standard_files() itself, so
+	# nothing else is needed here.
+	after_migrate()
 
 
 # Any string that only appears in the current _signoff_email_shell() output —
@@ -167,6 +190,7 @@ def after_migrate():
 	normalize_kyc_state_casing()
 	migrate_kyc_status_draft_to_in_progress()
 	backfill_kyc_status_from_docstatus()
+	install_vendor_kyc_workflow()
 	migrate_supplier_hold_to_is_frozen()
 	remove_stale_client_script("Vendor Background Check Load Rating Template Button")
 	migrate_compliance_checks_to_child_table()
@@ -198,15 +222,21 @@ def after_migrate():
 	remove_stale_web_form("vendor-signoff-upload")
 	remove_stale_setting("enforce_sequential_stages")
 	remove_stale_setting("sampling_mandatory")
+	# Both of these must run before backfill_sampling_mandatory_business_
+	# types() - it does a full settings.save(), which used to validate every
+	# mandatory field on this Settings singleton, including the two these
+	# backfill. ignore_mandatory=True on that save() is a second safety net
+	# now, but keeping the real dependency order here is still the correct
+	# fix, not just a workaround.
+	backfill_default_deboarding_rating_template()
+	backfill_default_deboarding_checklist_template()
 	backfill_sampling_mandatory_business_types()
 	migrate_background_check_result_method_off_average()
 	remove_stale_setting("minimum_average_rating")
 	remove_stale_web_form("vendor-satisfaction-survey")
 	remove_stale_setting("disable_timing")
-	backfill_default_deboarding_rating_template()
 	backfill_default_deboarding_request_email_templates()
 	migrate_is_resolvable_check_to_select()
-	backfill_default_deboarding_checklist_template()
 	backfill_default_checklist_task_email_templates()
 	backfill_default_clearance_certificate_email_templates()
 	backfill_default_signoff_followup_email_template()
@@ -243,6 +273,13 @@ def backfill_sampling_mandatory_business_types():
 		return
 	for business_type in missing:
 		settings.append("sampling_mandatory_overrides", {"business_type": business_type})
+	# This only ever touches sampling_mandatory_overrides - ignore_mandatory
+	# so a full save() here can't fail on some other, unrelated mandatory
+	# field on this same Settings singleton that a later step in
+	# after_migrate() hasn't backfilled yet (this bit a fresh install once
+	# already: default_deboarding_rating_template/default_checklist_template
+	# weren't set yet at this point in the sequence).
+	settings.flags.ignore_mandatory = True
 	settings.save(ignore_permissions=True)
 
 
@@ -470,17 +507,18 @@ def normalize_kyc_state_casing():
 
 def migrate_kyc_status_draft_to_in_progress():
 	# "Draft" was renamed to "In Progress" (Select options: In Progress /
-	# Verified / Rejected) when the Reject feature was added — existing
-	# records still hold the old label. A submitted (docstatus 1) record
-	# that never got flipped to "Verified" is a separate, pre-existing data
-	# gap (should have happened in on_submit) fixed here at the same time,
-	# rather than left stuck on a status that no longer exists at all.
+	# Verified / Rejected, later Approved instead of Verified) when the
+	# Reject feature was added — existing records still hold the old
+	# label. A submitted (docstatus 1) record that never got flipped to
+	# the submitted label is a separate, pre-existing data gap (should
+	# have happened in on_submit) fixed here at the same time, rather
+	# than left stuck on a status that no longer exists at all.
 	frappe.db.sql("""
 		update `tabVendor KYC` set status = 'In Progress'
 		where status = 'Draft' and docstatus = 0
 	""")
 	frappe.db.sql("""
-		update `tabVendor KYC` set status = 'Verified'
+		update `tabVendor KYC` set status = 'Approved'
 		where status = 'Draft' and docstatus = 1
 	""")
 
@@ -496,15 +534,125 @@ def backfill_kyc_status_from_docstatus():
 	# stuck showing whatever the current default ("In Progress") already
 	# was — indistinguishable from "never changed" — rather than "Draft".
 	# Catches every remaining straggler directly from docstatus instead
-	# of matching a specific stale label.
+	# of matching a specific stale label. "Verified" was later renamed to
+	# "Approved", and "Cancelled" became its own real status instead of a
+	# bounce back to "In Progress" once the Vendor KYC Workflow was added
+	# — this backfill's targets follow both renames so it still writes a
+	# currently-valid option if it ever needs to run again.
 	frappe.db.sql("""
-		update `tabVendor KYC` set status = 'Verified'
-		where docstatus = 1 and status != 'Verified'
+		update `tabVendor KYC` set status = 'Approved'
+		where docstatus = 1 and status != 'Approved'
 	""")
 	frappe.db.sql("""
-		update `tabVendor KYC` set status = 'In Progress'
-		where docstatus = 2 and status != 'In Progress'
+		update `tabVendor KYC` set status = 'Cancelled'
+		where docstatus = 2 and status != 'Cancelled'
 	""")
+
+
+# Vendor KYC's own status field (see vendor_kyc.json) drives, and is driven
+# by, this Workflow. A Vendor Lifecycle User does the actual KYC work and
+# submits it for review ("Send for Approval": In Progress -> Approval
+# Pending); everything from there on — Approve, Reject, Cancel — is a
+# Vendor Lifecycle Manager's call. In Progress/Approval Pending/Rejected are
+# docstatus 0 (Draft), Approved is docstatus 1 (Submitted, via the
+# Workflow's own "Approve" action calling doc.submit() - on_submit() still
+# runs exactly as before, Supplier creation included), Cancelled is
+# docstatus 2 (via "Cancel" calling doc.cancel()). "Approved", "Rejected"
+# and "Cancelled" - and the "Send for Approval"/"Approve"/"Reject"/"Cancel"
+# actions - are all standard Frappe fixtures already present on any fresh
+# site; only "In Progress"/"Approval Pending" (the states) and the Workflow
+# itself are genuinely new here, and even those are only created if not
+# already there.
+VENDOR_KYC_WORKFLOW_STATES = {
+	# state: (doc_status, allow_edit role, Workflow State style)
+	"In Progress": ("0", "Vendor Lifecycle User", "Warning"),
+	"Approval Pending": ("0", "Vendor Lifecycle Manager", "Info"),
+	"Approved": ("1", "Vendor Lifecycle Manager", None),  # reused as-is - already styled Success
+	"Rejected": ("0", "Vendor Lifecycle Manager", None),  # reused as-is - already styled Danger
+	"Cancelled": ("2", "Vendor Lifecycle Manager", None),  # reused as-is
+}
+# (state, action, next_state, allowed role) - one role per transition, per
+# the actual review split: only a User can send for approval, only a
+# Manager can decide from there.
+VENDOR_KYC_WORKFLOW_TRANSITIONS = [
+	("In Progress", "Send for Approval", "Approval Pending", "Vendor Lifecycle User"),
+	("Approval Pending", "Approve", "Approved", "Vendor Lifecycle Manager"),
+	("Approval Pending", "Reject", "Rejected", "Vendor Lifecycle Manager"),
+	("Approved", "Cancel", "Cancelled", "Vendor Lifecycle Manager"),
+]
+
+
+def install_vendor_kyc_workflow():
+	for state, (_doc_status, _allow_edit, style) in VENDOR_KYC_WORKFLOW_STATES.items():
+		if frappe.db.exists("Workflow State", state):
+			continue
+		frappe.get_doc({
+			"doctype": "Workflow State",
+			"workflow_state_name": state,
+			"style": style,
+		}).insert(ignore_permissions=True)
+
+	if frappe.db.exists("Workflow", "Vendor KYC"):
+		workflow = frappe.get_doc("Workflow", "Vendor KYC")
+	else:
+		workflow = frappe.new_doc("Workflow")
+		workflow.workflow_name = "Vendor KYC"
+		workflow.document_type = "Vendor KYC"
+		workflow.is_active = 1
+		workflow.send_email_alert = 0
+
+	# Frappe's own default ("workflow_state") - not the app's existing
+	# "status" Select field. Set explicitly (rather than left blank) so
+	# it's unambiguous in code, but it's the same value Frappe would use
+	# on its own; Frappe auto-creates its usual hidden Link-to-Workflow-
+	# State field for it the first time this is saved. The app's own
+	# status field keeps tracking the same states exactly as it already
+	# did (on_submit/on_cancel/reject) - untouched by this; the two just
+	# happen to always agree, tracked independently.
+	state_field_changed = workflow.workflow_state_field != "workflow_state"
+	workflow.workflow_state_field = "workflow_state"
+
+	# Rebuilt from the spec above every time rather than diffed - this is
+	# the one workflow the app installs, so there's nothing a site admin
+	# could have customized on it yet to preserve; simplest way to keep it
+	# in sync as the spec itself changes (e.g. adding Approval Pending here).
+	current_states = [
+		(s.state, s.doc_status, s.allow_edit) for s in workflow.states
+	]
+	desired_states = [
+		(state, doc_status, allow_edit)
+		for state, (doc_status, allow_edit, _style) in VENDOR_KYC_WORKFLOW_STATES.items()
+	]
+	current_transitions = [
+		(t.state, t.action, t.next_state, t.allowed) for t in workflow.transitions
+	]
+	if (
+		current_states == desired_states
+		and current_transitions == VENDOR_KYC_WORKFLOW_TRANSITIONS
+		and not state_field_changed
+	):
+		return
+
+	workflow.set("states", [])
+	workflow.set("transitions", [])
+	for state, (doc_status, allow_edit, _style) in VENDOR_KYC_WORKFLOW_STATES.items():
+		workflow.append("states", {
+			"state": state,
+			"doc_status": doc_status,
+			"allow_edit": allow_edit,
+		})
+	for state, action, next_state, allowed in VENDOR_KYC_WORKFLOW_TRANSITIONS:
+		workflow.append("transitions", {
+			"state": state,
+			"action": action,
+			"next_state": next_state,
+			"allowed": allowed,
+		})
+
+	if workflow.is_new():
+		workflow.insert(ignore_permissions=True)
+	else:
+		workflow.save(ignore_permissions=True)
 
 
 def migrate_supplier_hold_to_is_frozen():
@@ -1347,11 +1495,12 @@ DEFAULT_DEBOARDING_RATING_CRITERIA = [
 
 
 def backfill_default_deboarding_rating_template():
-	# Unlike Satisfaction Survey's default_rating_template, this one isn't
-	# mandatory — a Vendor Deboarding Request's Ratings table is just left
-	# empty if nothing resolves. Still worth seeding a real, usable default
-	# out of the box rather than leaving a brand-new site with nothing to
-	# point at. Never overwrites an existing choice.
+	# default_deboarding_rating_template is mandatory on Vendor Lifecycle
+	# Settings — a fresh install needs a real, usable template to point at
+	# out of the box, not just a mandatory field left blank. Generic/
+	# industry-neutral criteria, same as every other master in this app; a
+	# deployment is free to edit or replace this template afterward, this
+	# only ever fills it in once (never overwrites an existing choice).
 	for criteria_name in DEFAULT_DEBOARDING_RATING_CRITERIA:
 		if not frappe.db.exists("Deboarding Rating Criteria", criteria_name):
 			frappe.get_doc({"doctype": "Deboarding Rating Criteria", "criteria_name": criteria_name}).insert(
