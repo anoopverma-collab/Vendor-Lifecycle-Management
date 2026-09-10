@@ -94,11 +94,13 @@ frappe.ui.form.on("Vendor Onboarding Request", {
 			}
 
 			const kyc_stage = stages.find((s) => s.label === "KYC");
-			// A Rejected KYC counts as "already exists" the same as any other
-			// — whether a fresh attempt is allowed is entirely up to the
-			// Duplicate KYC Handling setting below, same as Vendor KYC's own
+			// A Rejected KYC is a dead attempt — same as "Not Started" for
+			// the purposes of this button — and never blocks a fresh one,
+			// regardless of the Duplicate KYC Handling setting below. That
+			// setting only matters for a genuine duplicate: an earlier KYC
+			// still Draft/In Progress/Approved. Matches Vendor KYC's own
 			// duplicate-check.
-			const has_kyc = !!kyc_stage && kyc_stage.state !== "Not Started";
+			const has_kyc = !!kyc_stage && kyc_stage.state !== "Not Started" && kyc_stage.state !== "Rejected";
 
 			const handling = frappe.boot.vendor_lifecycle_settings?.duplicate_kyc_handling || "Stop";
 			if (has_kyc && handling === "Stop") {

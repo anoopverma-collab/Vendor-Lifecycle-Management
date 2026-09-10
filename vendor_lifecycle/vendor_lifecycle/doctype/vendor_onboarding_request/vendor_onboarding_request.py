@@ -281,28 +281,42 @@ class VendorOnboardingRequest(Document):
 	def _kyc_stage_status(self):
 		"""Unlike the 4 stages after it, more than one Vendor KYC can exist
 		for the same request (a rejected attempt doesn't block a fresh one —
-		see Vendor KYC's own duplicate-check). Verified beats In Progress
-		beats Rejected beats Not Started, so a newer active/verified attempt
-		always takes over the display instead of a stale rejection."""
-		kycs = frappe.get_all("Vendor KYC", filters={"onboarding_request": self.name}, fields=["name", "status"])
+		see Vendor KYC's own duplicate-check). Approved beats In Progress
+		beats Rejected beats Not Started, so a newer active/approved attempt
+		always takes over the display instead of a stale rejection. A
+		Cancelled KYC is excluded entirely — same as a stale rejection, it
+		shouldn't be what this reports as "the" state for the request."""
+		kycs = frappe.get_all(
+			"Vendor KYC",
+			filters={"onboarding_request": self.name, "docstatus": ["!=", 2]},
+			fields=["name", "status"],
+		)
 		if not kycs:
 			return "Not Started"
 
 		# is_kyc_rejected() has to be checked per-KYC, before falling back
-		# to its own status field — a workflow-rejected KYC's status field
-		# is never touched by the workflow at all, so it's still sitting at
-		# "In Progress" (its default), not "Rejected". Checking status
-		# first would wrongly treat that as a genuinely in-progress KYC.
+		# to its own status field — a workflow using a workflow_state_field
+		# other than "status" (or different labels for it) would leave this
+		# doctype's own status field untouched, still sitting at whatever it
+		# was before ("In Progress" by default) rather than "Rejected".
+		# Checking status first would wrongly treat that as a genuinely
+		# in-progress KYC. The Vendor KYC Workflow this app installs by
+		# default does use "status" directly, so is_kyc_rejected() catches
+		# it on the first check either way — this stays as the safer,
+		# workflow-agnostic order regardless.
 		effective_states = []
 		for k in kycs:
-			if k.status == "Verified":
-				effective_states.append("Verified")
+			if k.status == "Approved":
+				effective_states.append("Approved")
 			elif is_kyc_rejected(k.name):
 				effective_states.append("Rejected")
-			elif k.status == "In Progress":
+			elif k.status in ("In Progress", "Approval Pending"):
+				# Approval Pending (awaiting a Manager's decision) is real,
+				# active progress too - same display bucket as In Progress,
+				# short of a dedicated pipeline-progress color of its own.
 				effective_states.append("In Progress")
 
-		if "Verified" in effective_states:
+		if "Approved" in effective_states:
 			return "Completed"
 		if "In Progress" in effective_states:
 			return "In Progress"

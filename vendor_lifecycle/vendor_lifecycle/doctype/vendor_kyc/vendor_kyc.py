@@ -14,6 +14,7 @@ from vendor_lifecycle.vendor_lifecycle.state_validation import (
 )
 from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
 	SUPPLIER_FIELD_MAP,
+	is_kyc_rejected,
 	maybe_create_vendor,
 	resolve_vendor_lifecycle_company_name,
 	send_vendor_lifecycle_email,
@@ -44,6 +45,7 @@ ADDRESS_TRIGGER_FIELDS = ["address_line_1", "city", "state", "pincode"]
 
 class VendorKYC(Document):
 	def validate(self):
+		self._sync_status_from_workflow_state()
 		self._enforce_rejected_is_frozen()
 		self._enforce_creation_source()
 		self._enforce_onboarding_request_mandatory()
@@ -61,6 +63,20 @@ class VendorKYC(Document):
 			self._enforce_bank_account_no_mandatory()
 		self._validate_state()
 		self._validate_establishment_date()
+
+	def _sync_status_from_workflow_state(self):
+		# The Vendor KYC Workflow this app installs drives Frappe's own
+		# default "workflow_state" field (a hidden Link, not this app's own
+		# "status" Select) - on_submit()/on_cancel()/reject() below already
+		# keep status correct for the states those 3 cover (Approved/
+		# Cancelled/Rejected), but a transition that neither submits nor
+		# cancels the document (In Progress -> Approval Pending, via "Send
+		# for Approval") has no other hook watching it at all, so status
+		# would otherwise go stale there. workflow_state is blank on any
+		# site with no active workflow for this doctype, so this is a
+		# no-op in that case rather than clobbering status with nothing.
+		if self.workflow_state and self.workflow_state != self.status:
+			self.status = self.workflow_state
 
 	def _validate_establishment_date(self):
 		if self.establishment_date and frappe.utils.getdate(self.establishment_date) > frappe.utils.getdate():
@@ -179,15 +195,17 @@ class VendorKYC(Document):
 		if handling == "Ignore":
 			return
 
-		# A Rejected KYC counts as "already exists" the same as any other —
-		# whether a fresh attempt is allowed after a rejection is entirely
-		# up to this setting, same as any other duplicate. "Stop" blocks
-		# it; switching to "Ignore" or "Warn" is the only way to allow one.
-		duplicate = frappe.db.get_value(
+		# A Rejected KYC is a dead attempt — same as a Cancelled or
+		# Failed-and-since-superseded Vendor Sign Off — and never blocks a
+		# fresh one, regardless of this setting. The setting only governs
+		# genuine duplicates: a second KYC started while an earlier one for
+		# this same request is still Draft/In Progress/Approved.
+		other_kyc_names = frappe.get_all(
 			"Vendor KYC",
-			{"name": ["!=", self.name or ""], "onboarding_request": self.onboarding_request},
-			"name",
+			filters={"name": ["!=", self.name or ""], "onboarding_request": self.onboarding_request},
+			pluck="name",
 		)
+		duplicate = next((name for name in other_kyc_names if not is_kyc_rejected(name)), None)
 		if not duplicate:
 			return
 
@@ -446,8 +464,12 @@ class VendorKYC(Document):
 		# calls on_submit()), so a bare self.status = ... here would only
 		# ever change the in-memory value for the rest of this request and
 		# never actually persist, leaving every submitted KYC stuck
-		# showing its original default ("In Progress") forever.
-		self.db_set("status", "Verified")
+		# showing its original default ("In Progress") forever. Also
+		# reached via the Workflow's own "Approve" action (which calls
+		# doc.submit() internally) - this still needs to run either way,
+		# since the workflow only sets the state field itself, not this
+		# knock-on Supplier-creation logic.
+		self.db_set("status", "Approved")
 		maybe_create_vendor(self)
 		self._notify_completed()
 
@@ -526,7 +548,12 @@ class VendorKYC(Document):
 		)
 
 	def on_cancel(self):
-		self.db_set("status", "In Progress")
+		# "Cancelled" is now its own real status (the Workflow's own
+		# terminal state for this), not a bounce back to "In Progress" -
+		# that used to make sense when "Cancelled" wasn't a recognized
+		# value at all, but would now fight the Workflow's own intent
+		# right after it sets this same field.
+		self.db_set("status", "Cancelled")
 
 	# DEFERRED IDEA — Lifecycle Timeline graph (built, tried, pulled on
 	# 2026-08-26; not scheduled again unless asked):
