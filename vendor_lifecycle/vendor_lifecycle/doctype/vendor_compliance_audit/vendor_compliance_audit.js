@@ -116,8 +116,14 @@ frappe.ui.form.on("Vendor Compliance Audit", {
 		// whichever side just became irrelevant, rather than leaving a
 		// stale value sitting in a now-hidden field.
 		if (frm.doc.conducted_by_external_agency) {
-			frm.clear_table("auditors");
-			frm.refresh_field("auditors");
+			// Table MultiSelect keeps a separate internal cache of
+			// already-picked values (used to exclude them from its own
+			// dropdown) that only the control's own set_value() resets -
+			// neither frm.clear_table() nor frm.set_value() (the form-level
+			// API) touch it, so a user removed either of those ways stays
+			// invisible in the suggestions for the rest of the session even
+			// though the field itself is empty again.
+			frm.fields_dict.auditors.set_value([]);
 		} else {
 			frm.set_value("external_auditor", "");
 			frm.set_value("external_agency_contact_person", "");

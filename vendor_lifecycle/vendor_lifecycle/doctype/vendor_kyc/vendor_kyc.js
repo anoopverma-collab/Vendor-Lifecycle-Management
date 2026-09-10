@@ -342,8 +342,14 @@ frappe.ui.form.on("Vendor KYC", {
 		// whichever side just became irrelevant, rather than leaving a
 		// stale value sitting in a now-hidden field.
 		if (frm.doc.verified_by_external_agency) {
-			frm.clear_table("verified_by");
-			frm.refresh_field("verified_by");
+			// Table MultiSelect keeps a separate internal cache of
+			// already-picked values (used to exclude them from its own
+			// dropdown) that only the control's own set_value() resets -
+			// neither frm.clear_table() nor frm.set_value() (the form-level
+			// API) touch it, so a user removed either of those ways stays
+			// invisible in the suggestions for the rest of the session even
+			// though the field itself is empty again.
+			frm.fields_dict.verified_by.set_value([]);
 		} else {
 			frm.set_value("external_verification_agency", "");
 			frm.set_value("external_agency_contact_person", "");
