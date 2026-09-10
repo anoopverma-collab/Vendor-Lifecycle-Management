@@ -1,7 +1,7 @@
 {
  "app": "vendor_lifecycle",
  "charts": [],
- "content": "[{\"id\":\"vlHeader1\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Vendor Lifecycle</b></span>\",\"col\":12}},{\"id\":\"vlNumCardVendors\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Vendors Through App\",\"col\":4}},{\"id\":\"vlNumCardOnboarding\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Onboarding Requests\",\"col\":4}},{\"id\":\"vlNumCardDeboarding\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Deboarding Requests\",\"col\":4}},{\"id\":\"vlShortcutOnboardingDashboard\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Vendor Onboarding Dashboard\",\"col\":4}},{\"id\":\"vlShortcutEngagementDashboard\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Vendor Engagement Dashboard\",\"col\":4}},{\"id\":\"vlShortcutDashboard\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Vendor Deboarding Dashboard\",\"col\":4}},{\"id\":\"vlSpacer1\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"vlCardOnboardingVerification\",\"type\":\"card\",\"data\":{\"card_name\":\"Onboarding & Verification\",\"col\":4}},{\"id\":\"vlCardDeboarding\",\"type\":\"card\",\"data\":{\"card_name\":\"Deboarding\",\"col\":4}},{\"id\":\"vlCardEngagement\",\"type\":\"card\",\"data\":{\"card_name\":\"Ongoing Engagement\",\"col\":4}},{\"id\":\"vlCardReports\",\"type\":\"card\",\"data\":{\"card_name\":\"Vendor Lifecycle Reports\",\"col\":4}},{\"id\":\"vlCardMastersSettings\",\"type\":\"card\",\"data\":{\"card_name\":\"Masters & Settings\",\"col\":4}},{\"id\":\"vlCardOtherMasters\",\"type\":\"card\",\"data\":{\"card_name\":\"Other Masters\",\"col\":4}}]",
+ "content": "[{\"id\":\"vlHeader1\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Vendor Lifecycle</b></span>\",\"col\":12}},{\"id\":\"vlNumCardVendors\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Vendors Created Through App\",\"col\":4}},{\"id\":\"vlNumCardOnboarding\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Onboarding Requests\",\"col\":4}},{\"id\":\"vlNumCardDeboarding\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Deboarding Requests\",\"col\":4}},{\"id\":\"vlShortcutOnboardingDashboard\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Vendor Onboarding Dashboard\",\"col\":4}},{\"id\":\"vlShortcutEngagementDashboard\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Vendor Engagement Dashboard\",\"col\":4}},{\"id\":\"vlShortcutDashboard\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Vendor Deboarding Dashboard\",\"col\":4}},{\"id\":\"vlSpacer1\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"vlCardOnboardingVerification\",\"type\":\"card\",\"data\":{\"card_name\":\"Onboarding & Verification\",\"col\":4}},{\"id\":\"vlCardDeboarding\",\"type\":\"card\",\"data\":{\"card_name\":\"Deboarding\",\"col\":4}},{\"id\":\"vlCardEngagement\",\"type\":\"card\",\"data\":{\"card_name\":\"Ongoing Engagement\",\"col\":4}},{\"id\":\"vlCardReports\",\"type\":\"card\",\"data\":{\"card_name\":\"Vendor Lifecycle Reports\",\"col\":4}},{\"id\":\"vlCardMastersSettings\",\"type\":\"card\",\"data\":{\"card_name\":\"Masters & Settings\",\"col\":4}},{\"id\":\"vlCardOtherMasters\",\"type\":\"card\",\"data\":{\"card_name\":\"Other Masters\",\"col\":4}}]",
  "creation": "2026-08-03 14:40:06.931794",
  "custom_blocks": [],
  "docstatus": 0,
@@ -470,13 +470,13 @@
    "type": "Link"
   }
  ],
- "modified": "2026-09-09 17:30:00.000000",
+ "modified": "2026-09-10 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Vendor Lifecycle",
  "name": "Vendor Lifecycle",
  "number_cards": [
   {
-   "number_card_name": "Vendors Through App"
+   "number_card_name": "Vendors Created Through App"
   },
   {
    "number_card_name": "Onboarding Requests"
