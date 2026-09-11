@@ -20,6 +20,12 @@ def get_context(context):
 	# read-only once it's actually Submitted (see status/docstatus), by
 	# either the vendor or an internal user hitting Submit.
 	context.is_pending = doc.docstatus == 0
+	# Real permission check, not just a docstatus guard - if the Supplier
+	# role's own Submit permission on this doctype is ever removed, the
+	# button now actually disappears instead of staying visible and
+	# failing with a raw Permission Error when clicked. Save stays the
+	# vendor's only path in that case (see the template itself).
+	context.can_submit = bool(frappe.has_permission("Vendor Satisfaction Survey", "submit", doc=doc))
 	# Fed to the edit form's JS as the base object frappe.client.save merges
 	# changes into — frappe.client.save() reconstructs the document purely
 	# from whatever dict it's given (it does not fetch-then-patch), so

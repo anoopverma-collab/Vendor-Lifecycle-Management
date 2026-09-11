@@ -62,8 +62,10 @@
 						<textarea class="form-control" name="remarks" rows="3">{{ doc.remarks or "" }}</textarea>
 					</div>
 				</div>
-				<button type="button" class="vl-btn vl-btn-outline" id="vss-save-btn">{{ _("Save Draft") }}</button>
+				<button type="button" class="vl-btn vl-btn-outline" id="vss-save-btn" {% if can_submit %}style="display:none;"{% endif %}>{{ _("Save Draft") }}</button>
+				{% if can_submit %}
 				<button type="button" class="vl-btn vl-btn-primary" id="vss-submit-btn">{{ _("Submit Survey") }}</button>
+				{% endif %}
 			</form>
 			{% else %}
 			{% if doc.ratings %}
@@ -131,8 +133,74 @@ function vssCallAndReload(method, btn) {
 document.getElementById("vss-save-btn").addEventListener("click", function (e) {
 	vssCallAndReload("frappe.client.save", e.target);
 });
+{% if can_submit %}
 document.getElementById("vss-submit-btn").addEventListener("click", function (e) {
 	vssCallAndReload("frappe.client.submit", e.target);
+});
+{% endif %}
+
+// "Dirty" tracking shared by the Save/Submit toggle below and the
+// unsaved-changes prompt on the "Back to Satisfaction Surveys" link.
+var vssForm = document.getElementById("vss-edit-form");
+
+function vssCurrentSnapshot() {
+	var scores = [];
+	document.querySelectorAll("#vss-ratings-table tbody tr").forEach(function (row) {
+		scores.push(row.querySelector(".vss-score").value);
+	});
+	return JSON.stringify({ scores: scores, issues: vssForm.issues.value, remarks: vssForm.remarks.value });
+}
+
+var vssCleanSnapshot = vssCurrentSnapshot();
+
+function vssIsDirty() {
+	return vssCurrentSnapshot() !== vssCleanSnapshot;
+}
+
+{% if can_submit %}
+// Same Save/Submit toggle as a standard Desk form: Submit shows for a
+// clean, already-saved draft; the moment anything actually changes, Save
+// takes its place instead, same as ERPNext's own forms - never both at
+// once. The page always does a full reload after either action (see
+// vssCallAndReload above), so "clean" here always means "matches what's
+// really saved", not just "matches how the page first loaded".
+(function () {
+	var saveBtn = document.getElementById("vss-save-btn");
+	var submitBtn = document.getElementById("vss-submit-btn");
+
+	function refreshDirtyState() {
+		var dirty = vssIsDirty();
+		saveBtn.style.display = dirty ? "" : "none";
+		submitBtn.style.display = dirty ? "none" : "";
+	}
+
+	vssForm.addEventListener("input", refreshDirtyState);
+	vssForm.addEventListener("change", refreshDirtyState);
+})();
+{% endif %}
+// Without submit permission, Save is the vendor's only action - always
+// shown, never toggled off (see index.py's can_submit and this
+// template's own conditional blocks above).
+
+// Leaving via the back link with unsaved changes - ask, rather than
+// silently dropping them (the default browser behavior for a plain link
+// click) or silently saving without asking either.
+document.querySelector(".vl-back-link").addEventListener("click", function (e) {
+	if (!vssIsDirty()) return;
+	e.preventDefault();
+	var href = this.getAttribute("href");
+	if (confirm("{{ _('You have unsaved changes. Save before leaving?') }}")) {
+		frappe.call({
+			type: "POST",
+			method: "frappe.client.save",
+			args: { doc: vssCollectDoc() },
+			callback: function () {
+				window.location.href = href;
+			},
+		});
+	} else {
+		window.location.href = href;
+	}
 });
 </script>
 {% endif %}
