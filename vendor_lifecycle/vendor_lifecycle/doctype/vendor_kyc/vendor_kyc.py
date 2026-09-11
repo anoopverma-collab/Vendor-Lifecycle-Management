@@ -6,7 +6,10 @@ import re
 import frappe
 from frappe.model.document import Document
 
-from vendor_lifecycle.vendor_lifecycle.stage_sequencing import get_available_stages
+from vendor_lifecycle.vendor_lifecycle.stage_sequencing import (
+	block_if_onboarding_request_stopped,
+	get_available_stages,
+)
 from vendor_lifecycle.vendor_lifecycle.state_validation import (
 	require_state_for_india,
 	validate_indian_state_spelling,
@@ -45,6 +48,7 @@ ADDRESS_TRIGGER_FIELDS = ["address_line_1", "city", "state", "pincode"]
 
 class VendorKYC(Document):
 	def validate(self):
+		block_if_onboarding_request_stopped(self)
 		self._sync_status_from_workflow_state()
 		self._enforce_rejected_is_frozen()
 		self._enforce_creation_source()
@@ -493,6 +497,7 @@ class VendorKYC(Document):
 			frappe.log_error(title="Vendor KYC: failed to send completed email", message=frappe.get_traceback())
 
 	def before_cancel(self):
+		block_if_onboarding_request_stopped(self)
 		# Frappe's own generic check_if_doc_is_linked would only ever catch
 		# the 4 submittable stage doctypes below (and only report the first
 		# one it happens to find) — this instead lists every single linked

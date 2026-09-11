@@ -59,6 +59,12 @@ class VendorDeboardingRequest(Document):
 		if self.status == "Rejected":
 			frappe.throw(frappe._("A rejected Vendor Deboarding Request cannot be submitted."))
 
+	def before_cancel(self):
+		if self.is_stopped:
+			frappe.throw(
+				frappe._("This request has been stopped — see its Comments for why — re-open it before cancelling.")
+			)
+
 	def after_insert(self):
 		self._notify_created()
 
@@ -116,6 +122,42 @@ class VendorDeboardingRequest(Document):
 		new_value = 0 if is_frozen else 1
 		frappe.db.set_value("Supplier", self.vendor, "is_frozen", new_value)
 		return {"is_frozen": new_value}
+
+	@frappe.whitelist()
+	def stop(self, reason):
+		"""Blocks the linked Vendor Deboarding Checklist from being created,
+		saved, submitted, or cancelled (see block_if_stopped below, called
+		from the Checklist's own validate()/on_cancel()) until this is
+		Re-opened. Anyone who can already edit this request can Stop/
+		Re-open it — no extra role restriction, same as Vendor Onboarding
+		Request's own stop()/reopen()."""
+		if self.docstatus != 1:
+			frappe.throw(frappe._("This request must be submitted before it can be stopped."))
+		if self.is_stopped:
+			frappe.throw(frappe._("This request is already stopped."))
+		if not (reason or "").strip():
+			frappe.throw(frappe._("A reason is required to stop this request."))
+		if frappe.db.exists("Vendor Deboarding Checklist", {"deboarding_request": self.name, "docstatus": 1}):
+			frappe.throw(frappe._("The Checklist for this request is already submitted — there's nothing left to stop."))
+
+		self.db_set("is_stopped", 1)
+		# db_set() bypasses save()/validate() (and Version tracking with it)
+		# - the reason lives only as a real Comment, one per event, not a
+		# field, since nothing ever branches on its value (see Vendor
+		# Onboarding Request's own stop()/reopen() for the same reasoning).
+		self.add_comment("Comment", text=frappe._("Stopped: {0}").format(reason.strip()))
+
+	@frappe.whitelist()
+	def reopen(self, reason):
+		if self.docstatus != 1:
+			frappe.throw(frappe._("This request must be submitted before it can be re-opened."))
+		if not self.is_stopped:
+			frappe.throw(frappe._("This request isn't stopped."))
+		if not (reason or "").strip():
+			frappe.throw(frappe._("A reason is required to re-open this request."))
+
+		self.db_set("is_stopped", 0)
+		self.add_comment("Comment", text=frappe._("Re-opened: {0}").format(reason.strip()))
 
 	def _notify_created(self):
 		try:
@@ -235,6 +277,25 @@ class VendorDeboardingRequest(Document):
 	@frappe.whitelist()
 	def get_open_transactions(self):
 		return get_open_transaction_counts(self.vendor)
+
+
+def block_if_stopped(doc):
+	"""Call from validate() (covers create and save — submit runs validate()
+	too) and on_cancel() on Vendor Deboarding Checklist — the real
+	enforcement, not just what a UI offers to click; stops a direct API
+	call, Data Import, or anything else that isn't the Checklist button
+	from creating, saving, submitting, or cancelling one while its Vendor
+	Deboarding Request has been Stopped."""
+	if not doc.deboarding_request:
+		return
+	if not frappe.db.get_value("Vendor Deboarding Request", doc.deboarding_request, "is_stopped"):
+		return
+	frappe.throw(
+		frappe._(
+			"This Vendor Deboarding Request has been stopped — see its Comments for why — re-open it if you want"
+			" to proceed."
+		)
+	)
 
 
 @frappe.whitelist()

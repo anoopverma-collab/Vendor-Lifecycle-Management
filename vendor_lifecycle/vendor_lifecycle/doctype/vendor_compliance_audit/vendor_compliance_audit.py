@@ -7,6 +7,7 @@ import frappe
 from frappe.model.document import Document
 
 from vendor_lifecycle.vendor_lifecycle.stage_sequencing import (
+	block_if_onboarding_request_stopped,
 	enforce_sequential_cancellation,
 	enforce_sequential_creation,
 	force_override_stage,
@@ -70,6 +71,7 @@ class VendorComplianceAudit(Document):
 			self.append("insurance_certificates", {"insurance_type": row.insurance_type})
 
 	def validate(self):
+		block_if_onboarding_request_stopped(self)
 		self._clear_unused_auditor_field()
 		self._clear_facility_area_if_not_applicable()
 		self._clear_valid_scope_if_global()
@@ -637,6 +639,7 @@ class VendorComplianceAudit(Document):
 		force_override_stage(self, reason)
 
 	def on_cancel(self):
+		block_if_onboarding_request_stopped(self)
 		enforce_sequential_cancellation(self)
 		self._revert_disable_if_this_was_the_failed_one()
 

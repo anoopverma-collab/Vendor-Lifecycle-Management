@@ -21,11 +21,13 @@ DEFAULT_ONBOARDING_RECEIVED_EMAIL_TEMPLATE = "Vendor Onboarding Request Received
 DEFAULT_ONBOARDING_NEW_REQUEST_EMAIL_TEMPLATE = "Vendor Onboarding Request - New Submission"
 DEFAULT_VENDOR_LIFECYCLE_PASSED_EMAIL_TEMPLATE = "Vendor Lifecycle Stage Passed"
 
-# Business Details fields required for every business type, once one is picked.
+# Business Details fields required for every business type, once one is
+# picked. years_in_business is deliberately not here — it's read-only and
+# auto-calculated from establishment_date (optional), not something to
+# demand from whoever's filling this in.
 COMMON_BUSINESS_DETAIL_FIELDS = [
 	"estimated_monthly_production_capacity",
 	"specialization",
-	"years_in_business",
 	"team_size",
 ]
 
@@ -132,6 +134,10 @@ class VendorOnboardingRequest(Document):
 				title="Vendor Onboarding Request: failed to send approved email", message=frappe.get_traceback()
 			)
 
+	def before_cancel(self):
+		if self.is_stopped:
+			frappe.throw(frappe._("This request has been stopped — see its Comments for why — re-open it before cancelling."))
+
 	def validate(self):
 		# mandatory_depends_on is desk-UI-only in this Frappe version — it
 		# never blocks a save via API or web form, so every conditional
@@ -200,8 +206,17 @@ class VendorOnboardingRequest(Document):
 		when (and whether) to save it."""
 		if self.docstatus != 1:
 			frappe.throw(frappe._("This request must be submitted before starting KYC."))
+		if self.is_stopped:
+			frappe.throw(frappe._("This request has been stopped — see its Comments for why — re-open it if you want to proceed."))
 
-		if frappe.db.exists("Vendor KYC", {"onboarding_request": self.name}):
+		# A Rejected KYC is a dead attempt — same as everywhere else this app
+		# checks for a duplicate KYC (see _check_duplicate_kyc_for_request on
+		# Vendor KYC itself) — never blocks a fresh one, regardless of this
+		# setting. The setting only governs a genuine duplicate: an earlier
+		# KYC for this same request that's still Draft/In Progress/Approved.
+		existing_kyc_names = frappe.get_all("Vendor KYC", filters={"onboarding_request": self.name}, pluck="name")
+		duplicate = next((name for name in existing_kyc_names if not is_kyc_rejected(name)), None)
+		if duplicate:
 			handling = frappe.db.get_single_value("Vendor Lifecycle Settings", "duplicate_kyc_handling") or "Stop"
 			if handling == "Stop":
 				frappe.throw(frappe._("A Vendor KYC already exists for this request."))
@@ -233,12 +248,62 @@ class VendorOnboardingRequest(Document):
 			"tax_id": self.tax_id,
 			"gstin_uin": self.gstin_uin,
 			"establishment_date": self.establishment_date,
+			"years_in_business": self.years_in_business,
 		}
 		# Covers "Other" -> other_business_type too, via TYPE_SPECIFIC_MANDATORY_FIELDS.
 		for fieldname in COMMON_BUSINESS_DETAIL_FIELDS + TYPE_SPECIFIC_MANDATORY_FIELDS.get(self.business_type, []):
 			values[fieldname] = self.get(fieldname)
 
 		return values
+
+	@frappe.whitelist()
+	def stop(self, reason):
+		"""Blocks the whole pipeline for this request — Vendor KYC and every
+		stage after it — from being created, saved, submitted, or cancelled
+		(see block_if_onboarding_request_stopped in stage_sequencing.py, the
+		actual enforcement all 5 of those doctypes call into) until this is
+		Re-opened. Anyone who can already edit this request can Stop/Re-open
+		it — no extra role restriction, unlike force_override_stage's own
+		hardcoded roles."""
+		if self.docstatus != 1:
+			frappe.throw(frappe._("This request must be submitted before it can be stopped."))
+		if self.is_stopped:
+			frappe.throw(frappe._("This request is already stopped."))
+		if not (reason or "").strip():
+			frappe.throw(frappe._("A reason is required to stop this request."))
+
+		sign_off_state = self._sign_off_stage_state()
+		if sign_off_state == "Completed":
+			frappe.throw(frappe._("Sign Off is already Completed for this request — there's nothing left to stop."))
+
+		self.db_set("is_stopped", 1)
+		# db_set() bypasses save()/validate() entirely - and with it, Version
+		# tracking - so without this, a Stop leaves no trace anywhere. The
+		# reason lives only here, as a real Comment (one per event, never
+		# overwritten) - not a field, since nothing ever branches on its
+		# value; see stopped_state() in stage_sequencing.py.
+		self.add_comment("Comment", text=frappe._("Stopped: {0}").format(reason.strip()))
+
+	@frappe.whitelist()
+	def reopen(self, reason):
+		if self.docstatus != 1:
+			frappe.throw(frappe._("This request must be submitted before it can be re-opened."))
+		if not self.is_stopped:
+			frappe.throw(frappe._("This request isn't stopped."))
+		if not (reason or "").strip():
+			frappe.throw(frappe._("A reason is required to re-open this request."))
+
+		self.db_set("is_stopped", 0)
+		self.add_comment("Comment", text=frappe._("Re-opened: {0}").format(reason.strip()))
+
+	def _sign_off_stage_state(self):
+		"""Just the Sign Off row from get_pipeline_progress() — reused by
+		stop() above so "is Sign Off Completed" can never drift from what
+		the pipeline progress bars themselves show."""
+		for stage in self.get_pipeline_progress():
+			if stage["label"] == "Sign Off":
+				return stage["state"]
+		return "Not Started"
 
 	@frappe.whitelist()
 	def get_pipeline_progress(self):

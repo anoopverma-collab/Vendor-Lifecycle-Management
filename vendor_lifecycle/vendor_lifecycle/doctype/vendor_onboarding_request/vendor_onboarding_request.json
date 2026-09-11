@@ -7,6 +7,7 @@
  "engine": "InnoDB",
  "field_order": [
   "source",
+  "is_stopped",
   "column_break_top",
   "company_name",
   "business_type",
@@ -70,6 +71,16 @@
    "fieldtype": "Select",
    "label": "Source",
    "options": "\nWeb Form\nInternal",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.is_stopped",
+   "description": "Set via the Stop/Re-open button. Blocks this request's whole pipeline from being created, saved, submitted, or cancelled.",
+   "fieldname": "is_stopped",
+   "fieldtype": "Check",
+   "label": "Stopped",
+   "no_copy": 1,
    "read_only": 1
   },
   {
@@ -219,7 +230,7 @@
   },
   {
    "depends_on": "eval:doc.business_type",
-   "description": "Used to auto-calculate Years in Business below — that field can still be edited by hand afterward.",
+   "description": "Used to auto-calculate Years in Business below.",
    "fieldname": "establishment_date",
    "fieldtype": "Date",
    "label": "Establishment Date"
@@ -229,13 +240,13 @@
    "fieldtype": "Column Break"
   },
   {
-   "depends_on": "eval:doc.business_type",
+   "depends_on": "eval:doc.establishment_date",
    "fieldname": "years_in_business",
    "fieldtype": "Float",
    "label": "Years in Business",
-   "mandatory_depends_on": "eval:doc.business_type",
    "non_negative": 1,
-   "precision": "2"
+   "precision": "2",
+   "read_only": 1
   },
   {
    "depends_on": "eval:doc.business_type",

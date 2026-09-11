@@ -5,6 +5,7 @@ import frappe
 from frappe.model.document import Document
 
 from vendor_lifecycle.vendor_lifecycle.stage_sequencing import (
+	block_if_onboarding_request_stopped,
 	enforce_sequential_cancellation,
 	enforce_sequential_creation,
 	force_override_stage,
@@ -31,6 +32,7 @@ class VendorSamplingEvaluation(Document):
 		require_no_active_document_for_kyc(self)
 
 	def validate(self):
+		block_if_onboarding_request_stopped(self)
 		self._require_sample_identifier()
 		self._warn_on_partial_or_failed_assessments()
 		self._warn_on_unreceived_samples_with_final_outcome()
@@ -223,6 +225,7 @@ class VendorSamplingEvaluation(Document):
 		force_override_stage(self, reason)
 
 	def on_cancel(self):
+		block_if_onboarding_request_stopped(self)
 		enforce_sequential_cancellation(self)
 		self._revert_disable_if_this_was_the_rejected_one()
 

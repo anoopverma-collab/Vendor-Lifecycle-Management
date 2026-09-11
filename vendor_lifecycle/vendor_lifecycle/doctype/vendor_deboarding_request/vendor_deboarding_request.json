@@ -11,6 +11,7 @@
   "column_break_top",
   "request_date",
   "status",
+  "is_stopped",
   "is_resolvable",
   "section_break_open_transactions",
   "open_transactions_summary",
@@ -54,6 +55,16 @@
    "in_standard_filter": 1,
    "label": "Status",
    "options": "Draft\nApproved\nRejected\nVendor Disabled",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.is_stopped",
+   "description": "Set via the Stop/Re-open button. Blocks the linked Checklist from being created, saved, submitted, or cancelled.",
+   "fieldname": "is_stopped",
+   "fieldtype": "Check",
+   "label": "Stopped",
+   "no_copy": 1,
    "read_only": 1
   },
   {

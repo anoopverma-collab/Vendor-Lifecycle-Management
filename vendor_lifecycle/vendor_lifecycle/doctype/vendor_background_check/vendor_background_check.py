@@ -5,6 +5,7 @@ import frappe
 from frappe.model.document import Document
 
 from vendor_lifecycle.vendor_lifecycle.stage_sequencing import (
+	block_if_onboarding_request_stopped,
 	enforce_sequential_cancellation,
 	enforce_sequential_creation,
 	force_override_stage,
@@ -57,6 +58,7 @@ class VendorBackgroundCheck(Document):
 			self.append("compliance_checks", {"check_type": row.check_type})
 
 	def validate(self):
+		block_if_onboarding_request_stopped(self)
 		self._clear_unused_auditor_field()
 		self._warn_on_flagged_or_failed_compliance_checks()
 		self._compute_overall_status()
@@ -398,6 +400,7 @@ class VendorBackgroundCheck(Document):
 			)
 
 	def on_cancel(self):
+		block_if_onboarding_request_stopped(self)
 		enforce_sequential_cancellation(self)
 		# Without this, Frappe's generic "linked document" check
 		# (check_no_back_links_exist) blocks cancelling this Background Check

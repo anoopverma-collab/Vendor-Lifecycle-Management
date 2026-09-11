@@ -14,6 +14,7 @@ from vendor_lifecycle.vendor_lifecycle.doctype.vendor_sampling_evaluation.vendor
 	VENDOR_LIFECYCLE_STATUS_SAMPLING_APPROVED,
 )
 from vendor_lifecycle.vendor_lifecycle.stage_sequencing import (
+	block_if_onboarding_request_stopped,
 	enforce_sequential_cancellation,
 	enforce_sequential_creation,
 	is_sampling_mandatory,
@@ -51,6 +52,7 @@ SIGNOFF_FOLLOWUP_DAYS = 7
 
 class VendorSignOff(Document):
 	def validate(self):
+		block_if_onboarding_request_stopped(self)
 		sync_vendor_field(self)
 		sync_onboarding_request_field(self)
 		enforce_sequential_creation(self)
@@ -583,6 +585,7 @@ class VendorSignOff(Document):
 		comm.send_email()
 
 	def on_cancel(self):
+		block_if_onboarding_request_stopped(self)
 		enforce_sequential_cancellation(self)  # no-op today — Sign Off is the last stage
 		if self.sign_off_failed:
 			self._revert_disable_if_this_was_the_failed_one()

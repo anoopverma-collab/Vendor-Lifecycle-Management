@@ -270,6 +270,12 @@ frappe.ui.form.on("Vendor KYC", {
 		};
 		frm.call("get_available_stages").then((r) => {
 			const result = r.message || {};
+			if (result.stopped) {
+				frm.dashboard.set_headline_alert(
+					`<div>${__("This vendor's Onboarding Request has been stopped — see its Comments for why — re-open it to resume the pipeline.")}</div>`,
+					"red"
+				);
+			}
 			for (const doctype of result.stages || []) {
 				// Sign-off is the only stage that can be offered a second
 				// time (after a genuine Failed outcome, without cancelling

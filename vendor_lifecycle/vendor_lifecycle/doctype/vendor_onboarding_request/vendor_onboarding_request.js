@@ -21,10 +21,9 @@ frappe.ui.form.on("Vendor Onboarding Request", {
 });
 
 frappe.ui.form.on("Vendor Onboarding Request", {
-	// A convenience default only — years_in_business stays a normal,
-	// editable field, so whoever fills this in can still correct it by
-	// hand afterward (e.g. the company changed legal entity but the
-	// business itself is actually older).
+	// years_in_business is read-only and only ever set here, from
+	// establishment_date — not something whoever's filling this in enters
+	// directly.
 	establishment_date(frm) {
 		if (!frm.doc.establishment_date) return;
 		const days = frappe.datetime.get_day_diff(frappe.datetime.now_date(), frm.doc.establishment_date);
@@ -87,10 +86,33 @@ frappe.ui.form.on("Vendor Onboarding Request", {
 			return;
 		}
 
+		if (frm.doc.is_stopped) {
+			frm.dashboard.set_headline_alert(
+				`<div>${__("This request has been stopped — see the Comments below for why — re-open it to resume the pipeline.")}</div>`,
+				"red"
+			);
+		}
+
 		frm.call("get_pipeline_progress").then((r) => {
 			const stages = r.message || [];
 			if (stages.length) {
 				render_pipeline_progress(stages);
+			}
+
+			// The toggle only makes sense once there's a pipeline to stop, and
+			// stops making sense once Sign Off is Completed — nothing left to
+			// stop or re-open at that point.
+			const sign_off_stage = stages.find((s) => s.label === "Sign Off");
+			const sign_off_completed = sign_off_stage && sign_off_stage.state === "Completed";
+			if (!sign_off_completed) {
+				add_stop_reopen_button(frm);
+			}
+
+			if (frm.doc.is_stopped) {
+				// Nothing else can be created while stopped (see
+				// block_if_onboarding_request_stopped, the real backend
+				// enforcement) — Start KYC shouldn't even be offered.
+				return;
 			}
 
 			const kyc_stage = stages.find((s) => s.label === "KYC");
@@ -123,6 +145,37 @@ frappe.ui.form.on("Vendor Onboarding Request", {
 		});
 	},
 });
+
+function add_stop_reopen_button(frm) {
+	// Anyone who can already edit this request can Stop/Re-open it — no
+	// extra role restriction (unlike Force Override elsewhere in this app,
+	// which is deliberately restricted) — matches stop()/reopen()'s own,
+	// equally unrestricted server-side check.
+	if (frm.doc.is_stopped) {
+		frm.add_custom_button(__("Re-open"), () => {
+			frappe.prompt(
+				[{ fieldname: "reason", fieldtype: "Small Text", label: __("Re-open Reason"), reqd: 1 }],
+				(values) => {
+					frm.call("reopen", { reason: values.reason }).then(() => frm.reload_doc());
+				},
+				__("Re-open This Request"),
+				__("Re-open")
+			);
+		}).addClass("btn-primary");
+		return;
+	}
+
+	frm.add_custom_button(__("Stop"), () => {
+		frappe.prompt(
+			[{ fieldname: "reason", fieldtype: "Small Text", label: __("Stop Reason"), reqd: 1 }],
+			(values) => {
+				frm.call("stop", { reason: values.reason }).then(() => frm.reload_doc());
+			},
+			__("Stop This Request"),
+			__("Stop")
+		);
+	}).addClass("btn-danger");
+}
 
 frappe.ui.form.on("Vendor Onboarding Request", {
 	setup(frm) {

@@ -6,6 +6,7 @@ from frappe.model.document import Document
 from frappe.utils import add_to_date, now_datetime, today
 
 from vendor_lifecycle.vendor_lifecycle.doctype.vendor_deboarding_request.vendor_deboarding_request import (
+	block_if_stopped,
 	get_open_transaction_details,
 )
 from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
@@ -56,6 +57,7 @@ class VendorDeboardingChecklist(Document):
 					self.append("checklist_items", row)
 
 	def validate(self):
+		block_if_stopped(self)
 		self._validate_only_one_checklist_per_request()
 		self._validate_item_status_changes_authorized()
 		self._validate_remark_required()
@@ -462,6 +464,7 @@ class VendorDeboardingChecklist(Document):
 		frappe.db.set_value("Vendor Deboarding Request", self.deboarding_request, "status", "Vendor Disabled")
 
 	def on_cancel(self):
+		block_if_stopped(self)
 		# Undoes on_submit()'s side effects — every other submittable
 		# doctype in this app reverts what it caused on cancel (see the
 		# four onboarding stage doctypes' own _revert_disable_if_this_

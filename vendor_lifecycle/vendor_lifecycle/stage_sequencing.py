@@ -135,6 +135,48 @@ def require_no_active_document_for_kyc(doc):
 		)
 
 
+def _onboarding_request_for(doc):
+	"""Resolve the Vendor Onboarding Request that owns `doc` — directly for
+	Vendor KYC (which has its own onboarding_request field), otherwise via
+	doc.kyc -> Vendor KYC.onboarding_request for the 4 stages after it.
+	Returns None if there isn't one to resolve (e.g. a KYC created with no
+	onboarding_request at all, or a stage doc with no kyc set yet)."""
+	if doc.doctype == "Vendor KYC":
+		return doc.onboarding_request
+	if not doc.kyc:
+		return None
+	return frappe.db.get_value("Vendor KYC", doc.kyc, "onboarding_request")
+
+
+def stopped_state(onboarding_request):
+	"""Whether the given Vendor Onboarding Request is currently Stopped, or
+	False if there isn't one to check. Single source of truth shared by
+	block_if_onboarding_request_stopped below and get_available_stages, so
+	the two can't drift on what "stopped" means. The reason for a Stop/
+	Re-open lives only as a Comment on the request itself (see stop()/
+	reopen()) — never read back here, so the actual enforcement stays one
+	cheap lookup on an indexed field, not a comment query."""
+	if not onboarding_request:
+		return False
+	return bool(frappe.db.get_value("Vendor Onboarding Request", onboarding_request, "is_stopped"))
+
+
+def block_if_onboarding_request_stopped(doc):
+	"""Call from validate() (covers create and save — submit runs validate()
+	too) and before_cancel() on Vendor KYC and each of the 4 stage doctypes
+	after it. This is the real enforcement — get_available_stages() below
+	only controls what a UI offers to click; this is what actually stops a
+	direct API call, Data Import, or anything else that isn't a button."""
+	if not stopped_state(_onboarding_request_for(doc)):
+		return
+	frappe.throw(
+		frappe._(
+			"This Vendor Onboarding Request has been stopped — see its Comments for why — re-open it if you want"
+			" to proceed."
+		)
+	)
+
+
 def enforce_sequential_creation(doc):
 	"""Call from validate() on any stage doctype after Vendor KYC. Requires
 	the nearest earlier *mandatory* stage to already be submitted before a
@@ -199,28 +241,43 @@ def get_available_stages(kyc):
 	disagree.
 
 	Returns {"stages": [...], "background_check_failed": bool,
-	"compliance_audit_failed": bool, "sampling_evaluation_rejected": bool}
-	rather than a bare list — a Failed Background Check, a Failed
-	Compliance Audit, or a Rejected Sampling Evaluation is each a hard,
-	unconditional stop on everything after it; the three flags let a
-	caller show an explanatory message for *why* nothing is available,
-	rather than a silently empty list that looks the same as "nothing
-	left to do". A Force Overridden result (force_overridden=1 — see
-	force_override() on each of the three doctypes) lifts this hard stop,
-	same as it lifts _nearest_requirement's own check above."""
+	"compliance_audit_failed": bool, "sampling_evaluation_rejected": bool,
+	"stopped": bool}. A Failed Background Check, a Failed Compliance Audit,
+	or a Rejected Sampling Evaluation is each a hard, unconditional stop on
+	everything after it; those flags (and "stopped", checked first — see
+	block_if_onboarding_request_stopped above) let a caller show an
+	explanatory message for *why* nothing is available, rather than a
+	silently empty list that looks the same as "nothing left to do". A
+	Force Overridden result (force_overridden=1 — see force_override() on
+	each of the three doctypes) lifts the failed/rejected hard stop, same
+	as it lifts _nearest_requirement's own check above — Stopped has no
+	such override, that's what Re-open is for."""
+	empty = {
+		"stages": [],
+		"background_check_failed": False,
+		"compliance_audit_failed": False,
+		"sampling_evaluation_rejected": False,
+		"sign_off_is_retry": False,
+		"stopped": False,
+	}
+
+	onboarding_request = frappe.db.get_value("Vendor KYC", kyc, "onboarding_request")
+	if stopped_state(onboarding_request):
+		return {**empty, "stopped": True}
+
 	if frappe.db.exists(
 		"Vendor Background Check", {"kyc": kyc, "docstatus": 1, "overall_status": "Failed", "force_overridden": 0}
 	):
-		return {"stages": [], "background_check_failed": True, "compliance_audit_failed": False, "sampling_evaluation_rejected": False, "sign_off_is_retry": False}
+		return {**empty, "background_check_failed": True}
 	if frappe.db.exists(
 		"Vendor Compliance Audit", {"kyc": kyc, "docstatus": 1, "outcome": "Failed", "force_overridden": 0}
 	):
-		return {"stages": [], "background_check_failed": False, "compliance_audit_failed": True, "sampling_evaluation_rejected": False, "sign_off_is_retry": False}
+		return {**empty, "compliance_audit_failed": True}
 	if frappe.db.exists(
 		"Vendor Sampling Evaluation",
 		{"kyc": kyc, "docstatus": 1, "evaluation_outcome": "Rejected", "force_overridden": 0},
 	):
-		return {"stages": [], "background_check_failed": False, "compliance_audit_failed": False, "sampling_evaluation_rejected": True, "sign_off_is_retry": False}
+		return {**empty, "sampling_evaluation_rejected": True}
 
 	settings = frappe.get_single("Vendor Lifecycle Settings")
 	available = []
@@ -255,13 +312,7 @@ def get_available_stages(kyc):
 		if not requirement or requirement[1]:
 			available.append(doctype)
 
-	return {
-		"stages": available,
-		"background_check_failed": False,
-		"compliance_audit_failed": False,
-		"sampling_evaluation_rejected": False,
-		"sign_off_is_retry": sign_off_is_retry,
-	}
+	return {**empty, "stages": available, "sign_off_is_retry": sign_off_is_retry}
 
 
 FORCE_OVERRIDE_ROLES = {"System Manager", "Vendor Lifecycle Manager"}

@@ -17,10 +17,32 @@ frappe.ui.form.on("Vendor Deboarding Request", {
 			grid.refresh();
 		}
 
-		if (frm.doc.docstatus === 1 && frm.doc.status === "Approved") {
+		if (frm.doc.docstatus === 1 && frm.doc.status === "Approved" && !frm.doc.is_stopped) {
 			frm.add_custom_button(__("Checklist"), () => {
 				frappe.new_doc("Vendor Deboarding Checklist", { deboarding_request: frm.doc.name });
 			}, __("Create"));
+			// Same primary-blue styling as Vendor KYC's own "Create" dropdown
+			// (and standard ERPNext's own, e.g. Sales Invoice's "Create" button).
+			frm.page.set_inner_btn_group_as_primary(__("Create"));
+		}
+
+		if (frm.doc.is_stopped) {
+			frm.dashboard.set_headline_alert(
+				`<div>${__("This request has been stopped — see the Comments below for why — re-open it to resume.")}</div>`,
+				"red"
+			);
+		}
+
+		if (frm.doc.docstatus === 1 && !frm.is_new()) {
+			// Hidden once a submitted Checklist exists - the pipeline's done,
+			// nothing left to stop or re-open.
+			frappe.db
+				.count("Vendor Deboarding Checklist", { filters: { deboarding_request: frm.doc.name, docstatus: 1 } })
+				.then((count) => {
+					if (!count) {
+						add_stop_reopen_button(frm);
+					}
+				});
 		}
 
 		// Real-time, not only-after-save: a brand new request gets its
@@ -104,3 +126,33 @@ frappe.ui.form.on("Vendor Deboarding Request", {
 		}
 	},
 });
+
+function add_stop_reopen_button(frm) {
+	// Anyone who can already edit this request can Stop/Re-open it — no
+	// extra role restriction, same as Vendor Onboarding Request's own
+	// toggle.
+	if (frm.doc.is_stopped) {
+		frm.add_custom_button(__("Re-open"), () => {
+			frappe.prompt(
+				[{ fieldname: "reason", fieldtype: "Small Text", label: __("Re-open Reason"), reqd: 1 }],
+				(values) => {
+					frm.call("reopen", { reason: values.reason }).then(() => frm.reload_doc());
+				},
+				__("Re-open This Request"),
+				__("Re-open")
+			);
+		}).addClass("btn-primary");
+		return;
+	}
+
+	frm.add_custom_button(__("Stop"), () => {
+		frappe.prompt(
+			[{ fieldname: "reason", fieldtype: "Small Text", label: __("Stop Reason"), reqd: 1 }],
+			(values) => {
+				frm.call("stop", { reason: values.reason }).then(() => frm.reload_doc());
+			},
+			__("Stop This Request"),
+			__("Stop")
+		);
+	}).addClass("btn-danger");
+}
