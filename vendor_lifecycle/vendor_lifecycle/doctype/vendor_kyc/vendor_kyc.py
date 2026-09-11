@@ -354,7 +354,6 @@ class VendorKYC(Document):
 	def before_submit(self):
 		if self.status == "Rejected":
 			frappe.throw(frappe._("A rejected Vendor KYC cannot be submitted."))
-		self._require_billing_currency()
 		require_state_for_india(self)
 		self._require_verification_source_complete()
 		self._enforce_supplier_mandatory_fields()
@@ -383,15 +382,6 @@ class VendorKYC(Document):
 				)
 		elif not self.verified_by:
 			frappe.throw(frappe._("Verified By must have at least one user before submitting."), frappe.MandatoryError)
-
-	def _require_billing_currency(self):
-		# Independently mandatory here regardless of Supplier's own
-		# default_currency field (not reqd in core ERPNext, so
-		# _enforce_supplier_mandatory_fields below wouldn't catch this on
-		# its own) — deferred to submit time, not validate(), so a draft
-		# can still be saved before it's decided.
-		if not self.billing_currency:
-			frappe.throw(frappe._("Billing Currency is mandatory before submitting."), frappe.MandatoryError)
 
 	def _enforce_supplier_mandatory_fields(self):
 		supplier_meta = frappe.get_meta("Supplier")

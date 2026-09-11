@@ -283,7 +283,8 @@
    "fieldtype": "Link",
    "ignore_user_permissions": 1,
    "label": "Billing Currency",
-   "options": "Currency"
+   "options": "Currency",
+   "reqd": 1
   },
   {
    "default": "0",
