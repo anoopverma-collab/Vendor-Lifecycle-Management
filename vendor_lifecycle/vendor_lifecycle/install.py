@@ -209,6 +209,16 @@ def after_migrate():
 	rename_estimated_monthly_capacity()
 	migrate_facility_applicable_to_yes_no()
 	backfill_license_insurance_masters()
+	backfill_default_compliance_check_sources()
+	backfill_default_coverage_types()
+	backfill_default_licenses_and_permits_masters()
+	remove_stale_generic_insurers()
+	backfill_default_insurance_masters()
+	# Must run after backfill_default_satisfaction_rating_template() above
+	# — it reuses the same Rating Criteria rows that function creates,
+	# even though it also re-ensures them defensively itself.
+	backfill_default_rating_criteria_template()
+	backfill_default_sampling_evaluation_template()
 	seed_indian_states()
 	migrate_signoff_email_settings_to_vendor_lifecycle()
 	backfill_default_signoff_email_template()
@@ -1304,6 +1314,16 @@ SETTINGS_FIELD_DEFAULTS = {
 	"reference_minimum_average_rating": 3,
 	"background_check_result_method": "Each Reference Must Pass",
 	"compliance_audit_validity_months": 12,
+	"onboarding_request_emails": 1,
+	"onboarding_verification_emails": 1,
+	"deboarding_request_emails": 1,
+	"deboarding_checklist_emails": 1,
+	"deboarding_checklist_task_reminder_emails": 1,
+	"deboarding_checklist_clearance_followup_emails": 1,
+	"satisfaction_survey_emails": 1,
+	"satisfaction_survey_reminder_emails": 1,
+	"support_ticket_emails": 1,
+	"support_ticket_escalation_emails": 1,
 }
 
 
@@ -1538,6 +1558,239 @@ def backfill_license_insurance_masters():
 	_backfill_master_from_columns("Insurer", "insurer_name", [
 		("Vendor Compliance Audit Insurance", "insurer"),
 	])
+
+
+DEFAULT_COMPLIANCE_CHECK_SOURCES = [
+	("Government Registry", "An official government-maintained registry or database."),
+	("Credit Bureau", "A credit reporting agency (e.g. CIBIL, Experian, Equifax)."),
+	("Sanctions / Watchlist Database", "A sanctions, PEP, or other watchlist database (e.g. OFAC, UN, EU)."),
+	("Court Records Database", "A civil or criminal court records search."),
+	("Media / News Search", "Adverse media or negative news coverage search."),
+	("Third-Party Verification Agency", "An external agency engaged to carry out the check."),
+]
+
+
+def backfill_default_compliance_check_sources():
+	# Compliance Check Source is picked on every Compliance Check row (see
+	# vendor_background_check_compliance_item.json's own "source" field) —
+	# unlike License Type/Issuing Authority/Insurance Type/Insurer above,
+	# this one was never a free-text field with existing data to backfill
+	# from, so a fresh install would otherwise leave it with nothing to
+	# choose from at all. Generic/industry-neutral, same as every other
+	# master in this app; only ever creates what's missing.
+	for name, description in DEFAULT_COMPLIANCE_CHECK_SOURCES:
+		if not frappe.db.exists("Compliance Check Source", name):
+			frappe.get_doc({
+				"doctype": "Compliance Check Source",
+				"source_name": name,
+				"description": description,
+			}).insert(ignore_permissions=True)
+
+
+DEFAULT_COVERAGE_TYPES = [
+	("Fire", "Damage or loss caused by fire."),
+	("Theft / Burglary", "Loss due to theft or burglary."),
+	("Flood", "Damage or loss caused by flooding."),
+	("Third-Party Liability", "Liability for injury or damage caused to a third party."),
+	("Business Interruption", "Loss of income due to a covered disruption to operations."),
+	("Employee Injury", "Injury or illness to an employee arising from their work."),
+]
+
+
+def backfill_default_coverage_types():
+	# Picked on every Insurance Peril row under a Vendor Compliance Audit's
+	# own Insurance table (see vendor_compliance_audit_insurance_peril.json)
+	# — same "nothing to choose from on a fresh install" reasoning as
+	# backfill_default_compliance_check_sources() above.
+	for name, description in DEFAULT_COVERAGE_TYPES:
+		if not frappe.db.exists("Coverage Type", name):
+			frappe.get_doc({
+				"doctype": "Coverage Type",
+				"coverage_type_name": name,
+				"description": description,
+			}).insert(ignore_permissions=True)
+
+
+DEFAULT_LICENSE_TYPES = [
+	("Business Registration / Trade License", "The core license to legally operate as a business."),
+	("Tax Registration Certificate", "Registration with the relevant tax authority (e.g. VAT/GST)."),
+	("Environmental Clearance", "Clearance confirming compliance with environmental regulations."),
+	("Fire Safety Certificate", "Certification of compliance with fire safety requirements."),
+	("Import / Export License", "Authorization to import or export goods."),
+	("Industry-Specific Operating License", "Any license specific to this vendor's own industry or trade."),
+]
+
+DEFAULT_ISSUING_AUTHORITIES = [
+	("Local Municipal Authority", "The vendor's local city/municipal government body."),
+	("National Tax Authority", "The country's central tax collection authority."),
+	("Environmental Protection Agency", "The relevant environmental regulator."),
+	("Fire Safety Department", "The local fire safety / fire department authority."),
+	("Trade / Commerce Ministry", "The national ministry or department overseeing trade."),
+	("Industry Regulatory Body", "Any regulator specific to this vendor's own industry."),
+]
+
+DEFAULT_LICENSES_AND_PERMITS_TEMPLATE = "Standard Licenses & Permits"
+
+
+def backfill_default_licenses_and_permits_masters():
+	# License Type and Issuing Authority are both mandatory Link fields on
+	# every Vendor Compliance Audit License row — backfill_license_
+	# insurance_masters() above only ever creates a record for a value
+	# some *existing* row already used, so a genuinely fresh install with
+	# no prior data would leave both completely empty. These generic
+	# defaults, plus one ready-to-use template built from them, give a
+	# fresh install something usable immediately — same "copy this and
+	# remove rows" pattern as _ensure_default_compliance_check_template()
+	# above. License Type must exist before the template's own rows
+	# reference it, or those Link rows would fail to insert — hence the
+	# explicit order within this one function.
+	for name, description in DEFAULT_LICENSE_TYPES:
+		if not frappe.db.exists("License Type", name):
+			frappe.get_doc({
+				"doctype": "License Type",
+				"license_type_name": name,
+				"description": description,
+			}).insert(ignore_permissions=True)
+
+	for name, description in DEFAULT_ISSUING_AUTHORITIES:
+		if not frappe.db.exists("Issuing Authority", name):
+			frappe.get_doc({
+				"doctype": "Issuing Authority",
+				"issuing_authority_name": name,
+				"description": description,
+			}).insert(ignore_permissions=True)
+
+	if not frappe.db.exists("Licenses and Permits Template", DEFAULT_LICENSES_AND_PERMITS_TEMPLATE):
+		frappe.get_doc({
+			"doctype": "Licenses and Permits Template",
+			"template_name": DEFAULT_LICENSES_AND_PERMITS_TEMPLATE,
+			"description": "All standard license/permit types. Copy this and remove rows to make a narrower template.",
+			"items": [{"license_type": name} for name, _description in DEFAULT_LICENSE_TYPES],
+		}).insert(ignore_permissions=True)
+
+
+DEFAULT_INSURANCE_TYPES = [
+	("General Liability Insurance", "Broad coverage for third-party bodily injury or property damage claims."),
+	("Product Liability Insurance", "Coverage for harm caused by a product the vendor supplies."),
+	("Workers' Compensation Insurance", "Coverage for employee injury or illness arising from their work."),
+	("Property Insurance", "Coverage for damage or loss to the vendor's own physical property."),
+	("Cyber Liability Insurance", "Coverage for data breaches and other cyber-related incidents."),
+	("Marine / Cargo Insurance", "Coverage for goods in transit by sea, air, or land."),
+]
+
+# Explicit product decision (2026-09-11): real, named insurers rather than
+# generic scope-based categories — a deployment can freely add/remove its
+# own beyond these.
+DEFAULT_INSURERS = [
+	("Life Insurance Corporation of India", "Life insurance provider."),
+	("Tata AIG General Insurance", "General insurance provider."),
+	("Star Health and Allied Insurance", "Health insurance provider."),
+	("Berkshire Hathaway", "General/reinsurance provider."),
+]
+
+# Superseded by DEFAULT_INSURERS above (2026-09-11) — removed here, not left
+# for a future site to accumulate alongside the real names.
+STALE_GENERIC_INSURERS = [
+	"Local / Regional Insurer",
+	"National Insurer",
+	"International / Multinational Insurer",
+	"Broker-Arranged Coverage",
+]
+
+
+def remove_stale_generic_insurers():
+	for name in STALE_GENERIC_INSURERS:
+		if not frappe.db.exists("Insurer", name):
+			continue
+		if frappe.db.exists("Vendor Compliance Audit Insurance", {"insurer": name}):
+			# Never delete a master record something real still points at
+			# — leave it for a human to reconcile instead.
+			continue
+		frappe.delete_doc("Insurer", name, ignore_permissions=True, force=True)
+
+DEFAULT_INSURANCE_TEMPLATE = "Standard Insurance Coverage"
+
+
+def backfill_default_insurance_masters():
+	# Same reasoning as backfill_default_licenses_and_permits_masters()
+	# above, for Insurance Type/Insurer/Insurance Template — Insurance
+	# Type must exist before the template's own rows reference it.
+	for name, description in DEFAULT_INSURANCE_TYPES:
+		if not frappe.db.exists("Insurance Type", name):
+			frappe.get_doc({
+				"doctype": "Insurance Type",
+				"insurance_type_name": name,
+				"description": description,
+			}).insert(ignore_permissions=True)
+
+	for name, description in DEFAULT_INSURERS:
+		if not frappe.db.exists("Insurer", name):
+			frappe.get_doc({
+				"doctype": "Insurer",
+				"insurer_name": name,
+				"description": description,
+			}).insert(ignore_permissions=True)
+
+	if not frappe.db.exists("Insurance Template", DEFAULT_INSURANCE_TEMPLATE):
+		frappe.get_doc({
+			"doctype": "Insurance Template",
+			"template_name": DEFAULT_INSURANCE_TEMPLATE,
+			"description": "All standard insurance types. Copy this and remove rows to make a narrower template.",
+			"items": [{"insurance_type": name} for name, _description in DEFAULT_INSURANCE_TYPES],
+		}).insert(ignore_permissions=True)
+
+
+DEFAULT_RATING_CRITERIA_TEMPLATE = "Standard Reference Rating"
+
+
+def backfill_default_rating_criteria_template():
+	# Rating Criteria Template is picked on Vendor Background Check
+	# Reference (scoring a vendor's own supplied reference) — reuses the
+	# same generic Rating Criteria master DEFAULT_SATISFACTION_RATING_
+	# CRITERIA already seeds for Satisfaction Surveys (see
+	# backfill_default_satisfaction_rating_template() above), rather than
+	# inventing a second, overlapping set of criteria names. Re-ensures
+	# those same rows exist here too, defensively, in case this ever runs
+	# before that function does.
+	for criteria_name in DEFAULT_SATISFACTION_RATING_CRITERIA:
+		if not frappe.db.exists("Rating Criteria", criteria_name):
+			frappe.get_doc({"doctype": "Rating Criteria", "criteria_name": criteria_name}).insert(
+				ignore_permissions=True
+			)
+
+	if not frappe.db.exists("Rating Criteria Template", DEFAULT_RATING_CRITERIA_TEMPLATE):
+		frappe.get_doc({
+			"doctype": "Rating Criteria Template",
+			"template_name": DEFAULT_RATING_CRITERIA_TEMPLATE,
+			"result_method": "Average",
+			"minimum_average_rating": 3,
+			"criteria": [{"criteria": name} for name in DEFAULT_SATISFACTION_RATING_CRITERIA],
+		}).insert(ignore_permissions=True)
+
+
+DEFAULT_SAMPLING_EVALUATION_CRITERIA = [
+	("Sample Conformance to Specification", "Quality"),
+	("Defect Rate Within Acceptable Limits", "Quality"),
+	("Packaging Adequacy", "Quality"),
+	("Labeling Accuracy", "Compliance"),
+	("Sample Submitted On Time", "Logistics"),
+]
+
+DEFAULT_SAMPLING_EVALUATION_TEMPLATE = "Standard Sampling Evaluation"
+
+
+def backfill_default_sampling_evaluation_template():
+	# Sampling Evaluation Template Criteria rows are plain text (no master
+	# doctype behind them — see sampling_evaluation_template_criteria.json)
+	# so there's no separate master to seed first here, unlike every other
+	# function in this section.
+	if not frappe.db.exists("Sampling Evaluation Template", DEFAULT_SAMPLING_EVALUATION_TEMPLATE):
+		frappe.get_doc({
+			"doctype": "Sampling Evaluation Template",
+			"template_name": DEFAULT_SAMPLING_EVALUATION_TEMPLATE,
+			"description": "A generic starting point. Copy this and adjust criteria to match what's actually being sampled.",
+			"criteria": [{"criteria": name, "category": category} for name, category in DEFAULT_SAMPLING_EVALUATION_CRITERIA],
+		}).insert(ignore_permissions=True)
 
 
 def seed_indian_states():
