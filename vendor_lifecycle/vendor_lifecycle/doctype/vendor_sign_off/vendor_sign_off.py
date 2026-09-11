@@ -29,6 +29,7 @@ from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
 	sync_onboarding_request_field,
 	sync_vendor_field,
 	vendor_lifecycle_cc_list,
+	vendor_lifecycle_doctype_email_enabled,
 	vendor_lifecycle_emails_enabled,
 )
 
@@ -243,6 +244,12 @@ class VendorSignOff(Document):
 		settings = frappe.get_single("Vendor Lifecycle Settings")
 		if not vendor_lifecycle_emails_enabled(settings):
 			frappe.throw(frappe._('"Use Emails" is off in Vendor Lifecycle Settings — enable it first.'))
+		# Bypasses send_vendor_lifecycle_email() (builds its own
+		# per-document Communications directly, see the docstring above) —
+		# so the per-doctype switch (shared by all 5 onboarding-
+		# verification stages) has to be checked explicitly here too.
+		if not vendor_lifecycle_doctype_email_enabled(self.doctype, DEFAULT_SIGNOFF_EMAIL_TEMPLATE, settings):
+			frappe.throw(frappe._("Onboarding & Verification emails are off in Vendor Lifecycle Settings — enable it first."))
 		if not frappe.db.exists("Email Template", DEFAULT_SIGNOFF_EMAIL_TEMPLATE):
 			frappe.throw(
 				frappe._("The {0} Email Template is missing — recreate it before sending.").format(
@@ -295,6 +302,13 @@ class VendorSignOff(Document):
 		whoever clicked it."""
 		settings = frappe.get_single("Vendor Lifecycle Settings")
 		if not vendor_lifecycle_emails_enabled(settings):
+			return False
+		# Checked explicitly (not left to send_vendor_lifecycle_email's own
+		# internal check) so a False return here actually means "nothing
+		# was sent" — without this, the switch being off would still
+		# return True below, falsely reporting success to both the
+		# scheduled job and the manual "Send Follow-up" button.
+		if not vendor_lifecycle_doctype_email_enabled(self.doctype, DEFAULT_SIGNOFF_FOLLOWUP_EMAIL_TEMPLATE, settings):
 			return False
 		if not frappe.db.exists("Email Template", DEFAULT_SIGNOFF_FOLLOWUP_EMAIL_TEMPLATE):
 			return False
@@ -461,6 +475,10 @@ class VendorSignOff(Document):
 		settings = frappe.get_single("Vendor Lifecycle Settings")
 		if not vendor_lifecycle_emails_enabled(settings):
 			return
+		# Bypasses send_vendor_lifecycle_email() — see the note on
+		# send_signoff_email() above.
+		if not vendor_lifecycle_doctype_email_enabled(self.doctype, DEFAULT_SIGNOFF_RECEIVED_EMAIL_TEMPLATE, settings):
+			return
 		if not frappe.db.exists("Email Template", DEFAULT_SIGNOFF_RECEIVED_EMAIL_TEMPLATE):
 			return
 		cc = vendor_lifecycle_cc_list(settings)
@@ -536,6 +554,10 @@ class VendorSignOff(Document):
 		if not vendor_lifecycle_emails_enabled(settings):
 			return
 		template_name = DEFAULT_SIGNOFF_FAILED_EMAIL_TEMPLATE if self.sign_off_failed else DEFAULT_SIGNOFF_PASSED_EMAIL_TEMPLATE
+		# Bypasses send_vendor_lifecycle_email() — see the note on
+		# send_signoff_email() above.
+		if not vendor_lifecycle_doctype_email_enabled(self.doctype, template_name, settings):
+			return
 		if not frappe.db.exists("Email Template", template_name):
 			return
 

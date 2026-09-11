@@ -562,6 +562,54 @@ def resolve_vendor_lifecycle_company_name():
 	return frappe.defaults.get_global_default("company") or frappe._("our team")
 
 
+# Doctype -> Settings fieldname gating that doctype's emails, on top of the
+# master "Use Emails" switch. The 5 onboarding-verification stage doctypes
+# (Vendor KYC and the four doctypes after it, excluding Deboarding) share
+# one combined switch rather than one each, per explicit product decision.
+DOCTYPE_EMAIL_SETTINGS_FIELD = {
+	"Vendor Onboarding Request": "onboarding_request_emails",
+	"Vendor KYC": "onboarding_verification_emails",
+	"Vendor Background Check": "onboarding_verification_emails",
+	"Vendor Compliance Audit": "onboarding_verification_emails",
+	"Vendor Sampling Evaluation": "onboarding_verification_emails",
+	"Vendor Sign Off": "onboarding_verification_emails",
+	"Vendor Deboarding Request": "deboarding_request_emails",
+	"Vendor Deboarding Checklist": "deboarding_checklist_emails",
+	"Vendor Satisfaction Survey": "satisfaction_survey_emails",
+	"Vendor Support Ticket": "support_ticket_emails",
+}
+
+# A handful of emails are scheduled "nag" reminders rather than their
+# doctype's main event-driven emails, and get their own separate switch
+# (shown nested under the doctype's own switch via depends_on in the
+# Settings form) — matched on the literal template name, since send_
+# vendor_lifecycle_email() only ever receives that, not which internal
+# code path triggered it. Checked in addition to, not instead of, the
+# doctype-level switch above.
+REMINDER_EMAIL_SETTINGS_FIELD = {
+	"Vendor Deboarding Checklist Task Reminder": "deboarding_checklist_task_reminder_emails",
+	"Vendor Deboarding Clearance Certificate Follow-up": "deboarding_checklist_clearance_followup_emails",
+	"Vendor Satisfaction Survey Reminder": "satisfaction_survey_reminder_emails",
+	"Vendor Support Ticket Escalation": "support_ticket_escalation_emails",
+}
+
+
+def vendor_lifecycle_doctype_email_enabled(doctype, template_name, settings):
+	"""Whether this specific email is allowed out, per its own per-doctype
+	(and, for the four scheduled reminders, per-reminder) Settings
+	checkbox — on top of, not instead of, the master "Use Emails" switch
+	the caller already checked. A doctype/template not mapped here
+	defaults to enabled, so this only ever restricts what's explicitly
+	listed above."""
+	doctype_field = DOCTYPE_EMAIL_SETTINGS_FIELD.get(doctype)
+	if doctype_field and not settings.get(doctype_field):
+		return False
+	reminder_field = REMINDER_EMAIL_SETTINGS_FIELD.get(template_name)
+	if reminder_field and not settings.get(reminder_field):
+		return False
+	return True
+
+
 def send_vendor_lifecycle_email(doctype, name, template_name, context, recipients, extra_cc=None):
 	"""Shared low-level sender for every new, simple (no-attachment)
 	Vendor Lifecycle notification — Onboarding Request received/approved,
@@ -577,6 +625,8 @@ def send_vendor_lifecycle_email(doctype, name, template_name, context, recipient
 	failure would be surprising."""
 	settings = frappe.get_single("Vendor Lifecycle Settings")
 	if not vendor_lifecycle_emails_enabled(settings):
+		return
+	if not vendor_lifecycle_doctype_email_enabled(doctype, template_name, settings):
 		return
 	if not recipients:
 		return
@@ -647,6 +697,12 @@ def _notify_manual_attach_needed_unsafe(doctype, name, owner, reason):
 		return
 	settings = frappe.get_single("Vendor Lifecycle Settings")
 	if not vendor_lifecycle_emails_enabled(settings):
+		return
+	# Bypasses send_vendor_lifecycle_email() (builds its own Communication
+	# directly, below) — so the caller's own per-doctype switch (Sign Off's
+	# or Deboarding Checklist's, whichever this notification is about) has
+	# to be checked explicitly here too.
+	if not vendor_lifecycle_doctype_email_enabled(doctype, DEFAULT_MANUAL_ATTACH_NEEDED_EMAIL_TEMPLATE, settings):
 		return
 	if not frappe.db.exists("Email Template", DEFAULT_MANUAL_ATTACH_NEEDED_EMAIL_TEMPLATE):
 		return

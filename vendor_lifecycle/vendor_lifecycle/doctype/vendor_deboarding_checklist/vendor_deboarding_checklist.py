@@ -14,6 +14,7 @@ from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
 	require_vendor_lifecycle_email_account,
 	send_vendor_lifecycle_email,
 	vendor_lifecycle_cc_list,
+	vendor_lifecycle_doctype_email_enabled,
 	vendor_lifecycle_emails_enabled,
 )
 
@@ -203,6 +204,13 @@ class VendorDeboardingChecklist(Document):
 		settings = frappe.get_single("Vendor Lifecycle Settings")
 		if not vendor_lifecycle_emails_enabled(settings):
 			return False
+		# Checked explicitly (not left to send_vendor_lifecycle_email's own
+		# internal check) so a False return here actually means "nothing
+		# was sent" — without this, the switch being off would still
+		# return True below, resetting last_notified_on as if this row's
+		# reminder clock had genuinely been refreshed.
+		if not vendor_lifecycle_doctype_email_enabled(self.doctype, template_name, settings):
+			return False
 		if not frappe.db.exists("Email Template", template_name):
 			return False
 
@@ -258,6 +266,14 @@ class VendorDeboardingChecklist(Document):
 			return
 		settings = frappe.get_single("Vendor Lifecycle Settings")
 		if not vendor_lifecycle_emails_enabled(settings):
+			return
+		# Bypasses send_vendor_lifecycle_email() (builds its own
+		# Communication directly) — see the same note on
+		# send_clearance_certificate_email() above for why this needs its
+		# own explicit check.
+		if not vendor_lifecycle_doctype_email_enabled(
+			self.doctype, DEFAULT_CLEARANCE_CERTIFICATE_RECEIVED_EMAIL_TEMPLATE, settings
+		):
 			return
 		if not frappe.db.exists("Email Template", DEFAULT_CLEARANCE_CERTIFICATE_RECEIVED_EMAIL_TEMPLATE):
 			return
@@ -362,6 +378,15 @@ class VendorDeboardingChecklist(Document):
 		settings = frappe.get_single("Vendor Lifecycle Settings")
 		if not vendor_lifecycle_emails_enabled(settings):
 			frappe.throw(frappe._('"Use Emails" is off in Vendor Lifecycle Settings — enable it first.'))
+		# This method bypasses send_vendor_lifecycle_email() entirely (it
+		# needs to attach the certificate file, which that shared sender
+		# doesn't support) — so the per-doctype switch has to be checked
+		# explicitly here too, or "Vendor Deboarding Checklist" being off
+		# would have no effect on this particular email at all.
+		if not vendor_lifecycle_doctype_email_enabled(
+			self.doctype, DEFAULT_CLEARANCE_CERTIFICATE_EMAIL_TEMPLATE, settings
+		):
+			frappe.throw(frappe._("Vendor Deboarding Checklist emails are off in Vendor Lifecycle Settings — enable it first."))
 		if not frappe.db.exists("Email Template", DEFAULT_CLEARANCE_CERTIFICATE_EMAIL_TEMPLATE):
 			frappe.throw(
 				frappe._("The {0} Email Template is missing — recreate it before sending.").format(
@@ -411,6 +436,16 @@ class VendorDeboardingChecklist(Document):
 		clear error to whoever clicked it."""
 		settings = frappe.get_single("Vendor Lifecycle Settings")
 		if not vendor_lifecycle_emails_enabled(settings):
+			return False
+		# Checked explicitly here (not left to send_vendor_lifecycle_email's
+		# own internal check) so a False return actually means what the
+		# caller — send_clearance_certificate_followup()'s manual button —
+		# needs it to mean: "nothing was sent". Without this, the switch
+		# below being off would still return True from here (the call was
+		# made, just silently no-op'd inside), reporting false success.
+		if not vendor_lifecycle_doctype_email_enabled(
+			self.doctype, DEFAULT_CLEARANCE_CERTIFICATE_FOLLOWUP_EMAIL_TEMPLATE, settings
+		):
 			return False
 		if not frappe.db.exists("Email Template", DEFAULT_CLEARANCE_CERTIFICATE_FOLLOWUP_EMAIL_TEMPLATE):
 			return False

@@ -33,8 +33,21 @@
   "default_rating_template",
   "notifications_tab",
   "enable_vendor_lifecycle_emails",
+  "column_break_email_account",
   "vendor_lifecycle_email_account",
-  "vendor_lifecycle_email_always_cc"
+  "vendor_lifecycle_email_always_cc",
+  "per_doctype_emails_section",
+  "onboarding_request_emails",
+  "onboarding_verification_emails",
+  "deboarding_request_emails",
+  "satisfaction_survey_emails",
+  "satisfaction_survey_reminder_emails",
+  "column_break_per_doctype_emails",
+  "deboarding_checklist_emails",
+  "deboarding_checklist_task_reminder_emails",
+  "deboarding_checklist_clearance_followup_emails",
+  "support_ticket_emails",
+  "support_ticket_escalation_emails"
  ],
  "fields": [
   {
@@ -236,6 +249,11 @@
   },
   {
    "depends_on": "eval:doc.enable_vendor_lifecycle_emails",
+   "fieldname": "column_break_email_account",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.enable_vendor_lifecycle_emails",
    "description": "Email account used to send all Vendor Lifecycle emails.",
    "fieldname": "vendor_lifecycle_email_account",
    "fieldtype": "Link",
@@ -250,6 +268,91 @@
    "fieldname": "vendor_lifecycle_email_always_cc",
    "fieldtype": "Small Text",
    "label": "Always CC"
+  },
+  {
+   "depends_on": "eval:doc.enable_vendor_lifecycle_emails",
+   "fieldname": "per_doctype_emails_section",
+   "fieldtype": "Section Break"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_vendor_lifecycle_emails",
+   "description": "Independent on/off switch for this doctype's own emails, on top of the master switch above.",
+   "fieldname": "onboarding_request_emails",
+   "fieldtype": "Check",
+   "label": "Vendor Onboarding Request Emails"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_vendor_lifecycle_emails",
+   "description": "Covers Vendor KYC, Vendor Background Check, Vendor Compliance Audit, Vendor Sampling Evaluation, and Vendor Sign Off.",
+   "fieldname": "onboarding_verification_emails",
+   "fieldtype": "Check",
+   "label": "Onboarding & Verification Emails"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_vendor_lifecycle_emails",
+   "fieldname": "deboarding_request_emails",
+   "fieldtype": "Check",
+   "label": "Vendor Deboarding Request Emails"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_vendor_lifecycle_emails",
+   "fieldname": "satisfaction_survey_emails",
+   "fieldtype": "Check",
+   "label": "Vendor Satisfaction Survey Emails"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_vendor_lifecycle_emails && doc.satisfaction_survey_emails",
+   "description": "Scheduled nag for a survey that's still not filled in.",
+   "fieldname": "satisfaction_survey_reminder_emails",
+   "fieldtype": "Check",
+   "label": "Satisfaction Survey Reminder"
+  },
+  {
+   "fieldname": "column_break_per_doctype_emails",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_vendor_lifecycle_emails",
+   "fieldname": "deboarding_checklist_emails",
+   "fieldtype": "Check",
+   "label": "Vendor Deboarding Checklist Emails"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_vendor_lifecycle_emails && doc.deboarding_checklist_emails",
+   "description": "Scheduled nag to whoever's assigned a still-open checklist task.",
+   "fieldname": "deboarding_checklist_task_reminder_emails",
+   "fieldtype": "Check",
+   "label": "Checklist Task Reminder"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_vendor_lifecycle_emails && doc.deboarding_checklist_emails",
+   "description": "Scheduled nag chasing an outstanding signed Clearance Certificate.",
+   "fieldname": "deboarding_checklist_clearance_followup_emails",
+   "fieldtype": "Check",
+   "label": "Clearance Certificate Follow-up"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_vendor_lifecycle_emails",
+   "fieldname": "support_ticket_emails",
+   "fieldtype": "Check",
+   "label": "Vendor Support Ticket Emails"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_vendor_lifecycle_emails && doc.support_ticket_emails",
+   "description": "Scheduled nag for a still-open ticket that's gone stale.",
+   "fieldname": "support_ticket_escalation_emails",
+   "fieldtype": "Check",
+   "label": "Support Ticket Escalation"
   }
  ],
  "grid_page_length": 50,
