@@ -242,6 +242,7 @@ def after_migrate():
 	backfill_default_signoff_followup_email_template()
 	remove_stale_setting("deboarding_notification_provider")
 	backfill_default_manual_attach_needed_email_template()
+	remove_stale_number_card("Vendors Through App")
 
 
 # Business Types considered "service nature", plus "Other" (too ambiguous to
@@ -353,6 +354,16 @@ def remove_stale_web_form(name):
 	# records — a Web Form whose JSON file has been deleted is left behind
 	# in the database forever otherwise, same as a Client Script above.
 	frappe.db.delete("Web Form", {"name": name})
+
+
+def remove_stale_number_card(name):
+	# Same story as remove_stale_web_form above - migrate's "Removing
+	# orphan doctypes" step doesn't cover Number Card either, so a renamed
+	# one (its old JSON file deleted, a new one added under the new name)
+	# leaves the old DB record behind forever, and every subsequent migrate
+	# logs a harmless but noisy "<old path>.json missing" warning trying to
+	# resync it.
+	frappe.db.delete("Number Card", {"name": name})
 
 
 # All Client Script logic in this app was moved into real, committed .js
