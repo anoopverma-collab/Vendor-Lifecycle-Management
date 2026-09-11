@@ -149,7 +149,7 @@ function add_force_override_button(frm) {
 	const canOverride = frappe.user.has_role("System Manager") || frappe.user.has_role("Vendor Lifecycle Manager");
 	if (!canOverride || frm.doc.force_overridden) return;
 
-	frm.add_custom_button(__("Force Override"), () => {
+	frm.add_custom_button(__("Force Override Status"), () => {
 		frappe.prompt(
 			[{ fieldname: "reason", fieldtype: "Small Text", label: __("Force Override Reason"), reqd: 1 }],
 			(values) => {
