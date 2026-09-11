@@ -3,6 +3,7 @@
 
 import glob
 import os
+import shutil
 
 import frappe
 from frappe.modules.import_file import import_file_by_path
@@ -37,6 +38,12 @@ def sync_standard_files():
 def before_migrate():
 	rename_license_template_doctype()
 	rename_insurance_template_doctype()
+	# Must run before sync_dashboards() (which happens early in migrate,
+	# well before after_migrate hooks) - otherwise this leftover empty
+	# folder from the Number Card rename still triggers the "missing"
+	# warning on this exact run, one time, before after_migrate() ever
+	# gets a chance to clean it up.
+	remove_stale_module_directory("number_card", "vendors_through_app")
 
 
 def rename_license_template_doctype():
@@ -364,6 +371,20 @@ def remove_stale_number_card(name):
 	# logs a harmless but noisy "<old path>.json missing" warning trying to
 	# resync it.
 	frappe.db.delete("Number Card", {"name": name})
+
+
+def remove_stale_module_directory(subfolder, name):
+	# Deleting every file inside a module subfolder (e.g. renaming a Number
+	# Card) doesn't remove the now-empty folder itself from anyone's
+	# existing checkout - git only tracks files, not directories, so
+	# `git pull` leaves it sitting there empty. Frappe's own dashboard sync
+	# then lists every folder under number_card/ and tries to load a .json
+	# out of each one it finds, logging a harmless but noisy "missing"
+	# warning for this one every migrate. Removing it here means nobody who
+	# already had the old file needs to clean it up by hand.
+	path = frappe.get_app_path("vendor_lifecycle", "vendor_lifecycle", subfolder, name)
+	if os.path.isdir(path):
+		shutil.rmtree(path)
 
 
 # All Client Script logic in this app was moved into real, committed .js
