@@ -173,7 +173,7 @@
    "mandatory_depends_on": "eval:doc.business_type"
   },
   {
-   "description": "Used to auto-calculate Years in Business below — you can still edit that field by hand afterward.",
+   "description": "Used to auto-calculate Years in Business below.",
    "fieldname": "establishment_date",
    "fieldtype": "Date",
    "label": "Establishment Date",
@@ -250,9 +250,9 @@
    "fieldname": "years_in_business",
    "fieldtype": "Float",
    "label": "Years in Business",
-   "depends_on": "eval:doc.business_type",
-   "mandatory_depends_on": "eval:doc.business_type",
-   "precision": "2"
+   "depends_on": "eval:doc.establishment_date",
+   "precision": "2",
+   "read_only": 1
   },
   {
    "fieldname": "team_size",
