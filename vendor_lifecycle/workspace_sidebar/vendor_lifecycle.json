@@ -5,6 +5,7 @@
  "doctype": "Workspace Sidebar",
  "header_icon": "handshake",
  "idx": 0,
+ "module_onboarding": "Vendor Lifecycle Onboarding",
  "items": [
   {
    "child": 0,

@@ -250,6 +250,7 @@ def after_migrate():
 	remove_stale_setting("deboarding_notification_provider")
 	backfill_default_manual_attach_needed_email_template()
 	remove_stale_number_card("Vendors Through App")
+	install_getting_started_sample()
 
 
 # Business Types considered "service nature", plus "Other" (too ambiguous to
@@ -385,6 +386,468 @@ def remove_stale_module_directory(subfolder, name):
 	path = frappe.get_app_path("vendor_lifecycle", "vendor_lifecycle", subfolder, name)
 	if os.path.isdir(path):
 		shutil.rmtree(path)
+
+
+# Sample/prototype only, proving out the Getting Started mechanism before
+# committing to writing real step content for every area of the app.
+# "Vendor Lifecycle Onboarding" (Module Onboarding) drives the floating
+# "Getting Started" panel - shared/global completion across every user,
+# triggered via workspace_sidebar/vendor_lifecycle.json's own
+# module_onboarding field (set on the source file, so sync_standard_files
+# above already re-syncs it on every migrate). The two Form Tours are only
+# ever launched by a user clicking a step in that panel - not ui_tour=1,
+# which would auto-launch them uninvited the instant someone opens a
+# matching page, and keep doing so on every visit until dismissed. That
+# also means these two don't auto-chain into each other (Frappe only
+# supports that via the ui_tour=1 auto-trigger path) - each is independent.
+def install_getting_started_sample():
+	_install_sample_form_tours()
+	_install_sample_module_onboarding()
+
+
+def _install_sample_form_tours():
+	# Deliberately NOT ui_tour=1 - that route-auto-triggers a tour the
+	# instant a user lands on a matching page (and keeps re-triggering on
+	# every visit until completed/skipped), which is exactly the unprompted,
+	# repeatedly-interrupting behavior we decided against. These are only
+	# ever launched by a user actually clicking "Take the Onboarding Tour"
+	# in the Getting Started panel (see the Onboarding Step below) - opt-in,
+	# once, never uninvited. The trade-off: Frappe only supports auto-
+	# chaining one tour into the next (next_form_tour) via that same
+	# ui_tour=1 auto-trigger mechanism, so these two tours no longer chain
+	# into each other - each is independent, launched on its own.
+	if not frappe.db.exists("Form Tour", "Vendor KYC Tour"):
+		frappe.get_doc({
+			"doctype": "Form Tour",
+			"title": "Vendor KYC Tour",
+			"reference_doctype": "Vendor KYC",
+			"save_on_complete": 0,
+			# Every mandatory field gets its own step, plus a handful of
+			# section overviews (anchored on a field that's always in the
+			# DOM on a fresh document - same depends_on trap as the
+			# Onboarding Request tour: Business Details' own fields are all
+			# gated on business_type, so that tab is only mentioned via the
+			# Business Type step, not its own step).
+			"steps": [
+				{
+					"title": "Verification",
+					"fieldname": "verified_by_external_agency",
+					"fieldtype": "Check",
+					"label": "Verified by External Agency",
+					"description": "Either pick internal verifiers below, or tick this to hand verification to an outside agency instead.",
+					"position": "Left",
+				},
+				{
+					"title": "Firm Name",
+					"fieldname": "firm_name",
+					"fieldtype": "Data",
+					"label": "Firm Name",
+					"description": "Carried over from the Onboarding Request - double-check it's correct. Mandatory.",
+					"position": "Left",
+				},
+				{
+					"title": "Legal Entity Type",
+					"fieldname": "legal_entity_type",
+					"fieldtype": "Select",
+					"label": "Legal Entity Type",
+					"description": "How this vendor is legally structured - Sole Proprietorship, Private Limited, Partnership, and so on. Mandatory.",
+					"position": "Left",
+				},
+				{
+					"title": "Billing Currency",
+					"fieldname": "billing_currency",
+					"fieldtype": "Link",
+					"label": "Billing Currency",
+					"description": "The Supplier Setup section - which currency this vendor is billed and paid in.",
+					"position": "Left",
+				},
+				{
+					"title": "Contact Person Name",
+					"fieldname": "contact_person_name",
+					"fieldtype": "Data",
+					"label": "Contact Person Name",
+					"description": "The Contact tab - who to reach at this vendor for day-to-day communication. Mandatory.",
+					"position": "Left",
+				},
+				{
+					"title": "Contact Person Number",
+					"fieldname": "contact_person_number",
+					"fieldtype": "Phone",
+					"label": "Contact Person Number",
+					"description": "A direct phone number for the Contact Person above. Mandatory.",
+					"position": "Left",
+				},
+				{
+					"title": "Official Email",
+					"fieldname": "official_email",
+					"fieldtype": "Data",
+					"label": "Official Email",
+					"description": "Where every KYC-related email to this vendor goes. Mandatory.",
+					"position": "Left",
+				},
+				{
+					"title": "Address Line 1",
+					"fieldname": "address_line_1",
+					"fieldtype": "Data",
+					"label": "Address Line 1",
+					"description": "The Address tab - the first line of this vendor's full postal address, used for the GSTIN checks further on for India-based vendors. Mandatory.",
+					"position": "Left",
+				},
+				{
+					"title": "City",
+					"fieldname": "city",
+					"fieldtype": "Data",
+					"label": "City",
+					"description": "The city this vendor's registered address is in. Mandatory.",
+					"position": "Left",
+				},
+				{
+					"title": "Country",
+					"fieldname": "country",
+					"fieldtype": "Link",
+					"label": "Country",
+					"description": "Mandatory - also decides whether the India-specific PAN/GSTIN fields on the Tax & Compliance tab show up.",
+					"position": "Left",
+				},
+				{
+					"title": "Postal / ZIP Code",
+					"fieldname": "pincode",
+					"fieldtype": "Data",
+					"label": "Postal / ZIP Code",
+					"description": "The postal or ZIP code for the address above. Mandatory.",
+					"position": "Left",
+				},
+				{
+					"title": "Business Type",
+					"fieldname": "business_type",
+					"fieldtype": "Select",
+					"label": "Business Type",
+					"description": "The Business Details tab - once you pick a Business Type, extra fields specific to that type of vendor appear below it. Mandatory.",
+					"position": "Left",
+				},
+				{
+					"title": "Tax & Compliance",
+					"fieldname": "tax_id",
+					"fieldtype": "Data",
+					"label": "Tax ID (PAN / VAT / EIN, etc.)",
+					"description": "PAN, GSTIN, business registration, and compliance certificates all live on this tab.",
+					"position": "Left",
+				},
+				{
+					"title": "Bank Details",
+					"fieldname": "bank_account_name",
+					"fieldtype": "Data",
+					"label": "Bank Account Name",
+					"description": "Needed before any payment can be made to this vendor.",
+					"position": "Left",
+				},
+			],
+		}).insert(ignore_permissions=True)
+
+	if not frappe.db.exists("Form Tour", "Vendor Onboarding Request Tour"):
+		frappe.get_doc({
+			"doctype": "Form Tour",
+			"title": "Vendor Onboarding Request Tour",
+			"reference_doctype": "Vendor Onboarding Request",
+			"save_on_complete": 0,
+			# 2 standout individual fields + 2 section overviews (anchored on
+			# each section's first real field, since the tour engine can
+			# only spotlight actual field elements, not a Section Break
+			# itself) - covers the whole form's structure without going
+			# field-by-field through all ~50 of them.
+			#
+			# "About Your Business" is deliberately not its own step here -
+			# every single field in that section has depends_on: business_type
+			# (they only render once a Business Type is picked), so there's
+			# no field in it that's reliably in the DOM for the tour to
+			# anchor on. Mentioned in the Business Type step's own
+			# description instead.
+			"steps": [
+				{
+					"title": "Company / Firm Name",
+					"fieldname": "company_name",
+					"fieldtype": "Data",
+					"label": "Company / Firm Name",
+					"description": "The vendor's registered company or firm name.",
+					"position": "Left",
+				},
+				{
+					"title": "Business Type",
+					"fieldname": "business_type",
+					"fieldtype": "Select",
+					"label": "Business Type",
+					"description": "What the vendor does - once you pick one, an \"About Your Business\" section appears further down with extra fields specific to that type of vendor.",
+					"position": "Left",
+				},
+				{
+					"title": "Contact & Address",
+					"fieldname": "contact_person",
+					"fieldtype": "Data",
+					"label": "Contact Person",
+					"description": "This section covers the vendor's basic reachability - Contact Person, Phone, Email, and full Address.",
+					"position": "Left",
+				},
+				{
+					"title": "Profile & Catalogue",
+					"fieldname": "profile_attachment",
+					"fieldtype": "Attach",
+					"label": "Business / Capability Profile",
+					"description": "Optional supporting documents - a company profile, product catalogue, or anything else worth attaching.",
+					"position": "Left",
+				},
+			],
+		}).insert(ignore_permissions=True)
+
+	if not frappe.db.exists("Form Tour", "Vendor Deboarding Request Tour"):
+		frappe.get_doc({
+			"doctype": "Form Tour",
+			"title": "Vendor Deboarding Request Tour",
+			"reference_doctype": "Vendor Deboarding Request",
+			"save_on_complete": 0,
+			# No step for the "Open Transactions" HTML display - same
+			# depends_on-style trap as elsewhere: its content is only ever
+			# populated by JS after the document is saved with a real
+			# vendor (`if (frm.is_new()) return;` in this doctype's own
+			# .js), so it's empty on the fresh document the tour runs on.
+			"steps": [
+				{
+					"title": "Vendor",
+					"fieldname": "vendor",
+					"fieldtype": "Link",
+					"label": "Vendor",
+					"description": "Who's being deboarded. Mandatory.",
+					"position": "Left",
+				},
+				{
+					"title": "Reason",
+					"fieldname": "reason",
+					"fieldtype": "Small Text",
+					"label": "Reason",
+					"description": "Why this vendor is being deboarded. Mandatory.",
+					"position": "Left",
+				},
+				{
+					"title": "Is the Issue Resolvable?",
+					"fieldname": "is_resolvable",
+					"fieldtype": "Select",
+					"label": "Is the Issue with the Vendor Resolvable?",
+					"description": "A judgment call on whether this could still be fixed rather than ending the relationship. Mandatory.",
+					"position": "Left",
+				},
+				{
+					"title": "Ratings",
+					"fieldname": "ratings",
+					"fieldtype": "Table",
+					"label": "Ratings",
+					"description": "Score every row here before this request can be saved - a final performance record for this vendor.",
+					"position": "Left",
+				},
+			],
+		}).insert(ignore_permissions=True)
+
+	if not frappe.db.exists("Form Tour", "Vendor Deboarding Checklist Tour"):
+		frappe.get_doc({
+			"doctype": "Form Tour",
+			"title": "Vendor Deboarding Checklist Tour",
+			"reference_doctype": "Vendor Deboarding Checklist",
+			"save_on_complete": 0,
+			"steps": [
+				{
+					"title": "Checklist Template",
+					"fieldname": "checklist_template",
+					"fieldtype": "Link",
+					"label": "Checklist Template",
+					"description": "Which template this Checklist's tasks were loaded from. Mandatory.",
+					"position": "Left",
+				},
+				{
+					"title": "Company",
+					"fieldname": "company",
+					"fieldtype": "Link",
+					"label": "Company",
+					"description": "Which Company this Checklist belongs to - used to resolve the GSTIN shown on the clearance certificate email.",
+					"position": "Left",
+				},
+				{
+					"title": "Additional Email",
+					"fieldname": "additional_email",
+					"fieldtype": "Data",
+					"label": "Additional Supplier Email",
+					"description": "An extra recipient for the clearance certificate email, alongside the vendor's own KYC/Supplier contacts.",
+					"position": "Left",
+				},
+				{
+					"title": "Checklist Items",
+					"fieldname": "checklist_items",
+					"fieldtype": "Table",
+					"label": "Checklist Items",
+					"description": "Every task needs a status (Completed/Invalid/Unable to Complete) and at least one assignee before this Checklist can be submitted.",
+					"position": "Left",
+				},
+				{
+					"title": "Clearance",
+					"fieldname": "no_clearance_certificate",
+					"fieldtype": "Check",
+					"label": "No Clearance Certificate Available",
+					"description": "Attach the signed clearance certificate below, or tick this and give a reason if one genuinely isn't available.",
+					"position": "Left",
+				},
+			],
+		}).insert(ignore_permissions=True)
+
+	if not frappe.db.exists("Form Tour", "Vendor Satisfaction Survey Tour"):
+		frappe.get_doc({
+			"doctype": "Form Tour",
+			"title": "Vendor Satisfaction Survey Tour",
+			"reference_doctype": "Vendor Satisfaction Survey",
+			"save_on_complete": 0,
+			"steps": [
+				{
+					"title": "Vendor",
+					"fieldname": "vendor",
+					"fieldtype": "Link",
+					"label": "Vendor",
+					"description": "Which vendor this survey is scoring. Mandatory.",
+					"position": "Left",
+				},
+				{
+					"title": "Period",
+					"fieldname": "period",
+					"fieldtype": "Select",
+					"label": "Period",
+					"description": "Which period this survey covers. Mandatory.",
+					"position": "Left",
+				},
+				{
+					"title": "Survey Date",
+					"fieldname": "survey_date",
+					"fieldtype": "Date",
+					"label": "Survey Date",
+					"description": "When this survey was conducted. Mandatory.",
+					"position": "Left",
+				},
+				{
+					"title": "Ratings",
+					"fieldname": "ratings",
+					"fieldtype": "Table",
+					"label": "Ratings",
+					"description": "Score every criteria row here - the actual satisfaction scoring for this vendor.",
+					"position": "Left",
+				},
+				{
+					"title": "Feedback",
+					"fieldname": "issues",
+					"fieldtype": "Small Text",
+					"label": "Areas of Concern",
+					"description": "The Feedback section - Areas of Concern and Suggestions for Improvement, both optional free text.",
+					"position": "Left",
+				},
+			],
+		}).insert(ignore_permissions=True)
+
+
+def _install_sample_module_onboarding():
+	if not frappe.db.exists("Onboarding Step", "Vendor Lifecycle Settings Setup"):
+		frappe.get_doc({
+			"doctype": "Onboarding Step",
+			"name": "Vendor Lifecycle Settings Setup",
+			"title": "Set Up Vendor Lifecycle Settings",
+			# Deliberately plain navigation, not a Form Tour - Vendor
+			# Lifecycle Settings is a Single doctype, and Frappe's own tour
+			# engine has a real compatibility gap with Singles (the tour
+			# cancels itself before ever showing anything, traced to an
+			# extra internal navigation step Singles trigger on load that
+			# a regular doctype's form doesn't). Not something worth
+			# fighting for a light sample - just get the user there.
+			"action": "Update Settings",
+			"reference_document": "Vendor Lifecycle Settings",
+			"validate_action": 0,
+			"action_label": "Review Settings",
+			"description": "Review the default templates, mandatory checks, and email account before anything else.",
+		}).insert(ignore_permissions=True)
+
+	if not frappe.db.exists("Onboarding Step", "Vendor Onboarding Request Tour Step"):
+		frappe.get_doc({
+			"doctype": "Onboarding Step",
+			"name": "Vendor Onboarding Request Tour Step",
+			"title": "Take the Onboarding Tour",
+			# The floating "Getting Started" panel (OnboardingPanel.vue)
+			# shows action_label as each step's own button text - unlike
+			# the older block-widget renderer (onboarding_widget.js), it has
+			# no fallback to title/action if this is left blank, so it just
+			# renders empty.
+			"action_label": "Onboarding Request",
+			"action": "Show Form Tour",
+			"reference_document": "Vendor Onboarding Request",
+			"form_tour": "Vendor Onboarding Request Tour",
+			"description": "A quick walkthrough of the first form in the onboarding pipeline.",
+		}).insert(ignore_permissions=True)
+
+	if not frappe.db.exists("Onboarding Step", "Vendor KYC Tour Step"):
+		frappe.get_doc({
+			"doctype": "Onboarding Step",
+			"name": "Vendor KYC Tour Step",
+			"title": "Take the KYC Tour",
+			"action_label": "Vendor KYC",
+			"action": "Show Form Tour",
+			"reference_document": "Vendor KYC",
+			"form_tour": "Vendor KYC Tour",
+			"description": "A quick walkthrough of the KYC form - verification, firm details, address, business type, tax, and bank details.",
+		}).insert(ignore_permissions=True)
+
+	if not frappe.db.exists("Onboarding Step", "Vendor Deboarding Request Tour Step"):
+		frappe.get_doc({
+			"doctype": "Onboarding Step",
+			"name": "Vendor Deboarding Request Tour Step",
+			"title": "Take the Deboarding Request Tour",
+			"action_label": "Deboarding Request",
+			"action": "Show Form Tour",
+			"reference_document": "Vendor Deboarding Request",
+			"form_tour": "Vendor Deboarding Request Tour",
+			"description": "A quick walkthrough of the Deboarding Request form.",
+		}).insert(ignore_permissions=True)
+
+	if not frappe.db.exists("Onboarding Step", "Vendor Deboarding Checklist Tour Step"):
+		frappe.get_doc({
+			"doctype": "Onboarding Step",
+			"name": "Vendor Deboarding Checklist Tour Step",
+			"title": "Take the Deboarding Checklist Tour",
+			"action_label": "Deboarding Checklist",
+			"action": "Show Form Tour",
+			"reference_document": "Vendor Deboarding Checklist",
+			"form_tour": "Vendor Deboarding Checklist Tour",
+			"description": "A quick walkthrough of the Deboarding Checklist form.",
+		}).insert(ignore_permissions=True)
+
+	if not frappe.db.exists("Onboarding Step", "Vendor Satisfaction Survey Tour Step"):
+		frappe.get_doc({
+			"doctype": "Onboarding Step",
+			"name": "Vendor Satisfaction Survey Tour Step",
+			"title": "Take the Satisfaction Survey Tour",
+			"action_label": "Satisfaction Survey",
+			"action": "Show Form Tour",
+			"reference_document": "Vendor Satisfaction Survey",
+			"form_tour": "Vendor Satisfaction Survey Tour",
+			"description": "A quick walkthrough of the Satisfaction Survey form.",
+		}).insert(ignore_permissions=True)
+
+	if frappe.db.exists("Module Onboarding", "Vendor Lifecycle Onboarding"):
+		return
+	frappe.get_doc({
+		"doctype": "Module Onboarding",
+		"name": "Vendor Lifecycle Onboarding",
+		"title": "Vendor Lifecycle Setup",
+		"module": "Vendor Lifecycle",
+		"allow_roles": [{"role": "Vendor Lifecycle Manager"}],
+		"steps": [
+			{"step": "Vendor Onboarding Request Tour Step"},
+			{"step": "Vendor KYC Tour Step"},
+			{"step": "Vendor Deboarding Request Tour Step"},
+			{"step": "Vendor Deboarding Checklist Tour Step"},
+			{"step": "Vendor Satisfaction Survey Tour Step"},
+			{"step": "Vendor Lifecycle Settings Setup"},
+		],
+	}).insert(ignore_permissions=True)
 
 
 # All Client Script logic in this app was moved into real, committed .js

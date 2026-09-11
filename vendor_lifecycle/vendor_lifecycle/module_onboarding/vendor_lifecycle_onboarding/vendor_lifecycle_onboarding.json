@@ -1,0 +1,41 @@
+{
+ "allow_roles": [
+  {
+   "role": "Vendor Lifecycle Manager"
+  },
+  {
+   "role": "Vendor Lifecycle Manager"
+  }
+ ],
+ "creation": "2026-09-11 17:01:27.439186",
+ "docstatus": 0,
+ "doctype": "Module Onboarding",
+ "idx": 0,
+ "is_complete": 0,
+ "modified": "2026-09-11 17:01:27.439186",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "Vendor Lifecycle Onboarding",
+ "owner": "Administrator",
+ "steps": [
+  {
+   "step": "Vendor Onboarding Request Tour Step"
+  },
+  {
+   "step": "Vendor KYC Tour Step"
+  },
+  {
+   "step": "Vendor Deboarding Request Tour Step"
+  },
+  {
+   "step": "Vendor Deboarding Checklist Tour Step"
+  },
+  {
+   "step": "Vendor Satisfaction Survey Tour Step"
+  },
+  {
+   "step": "Vendor Lifecycle Settings Setup"
+  }
+ ],
+ "title": "Vendor Lifecycle Setup"
+}

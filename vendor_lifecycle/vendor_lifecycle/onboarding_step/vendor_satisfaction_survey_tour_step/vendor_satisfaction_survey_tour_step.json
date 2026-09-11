@@ -1,0 +1,22 @@
+{
+ "action": "Show Form Tour",
+ "action_label": "Satisfaction Survey",
+ "creation": "2026-09-11 17:01:27.420017",
+ "description": "A quick walkthrough of the Satisfaction Survey form.",
+ "docstatus": 0,
+ "doctype": "Onboarding Step",
+ "form_tour": "Vendor Satisfaction Survey Tour",
+ "idx": 0,
+ "is_complete": 0,
+ "is_single": 0,
+ "is_skipped": 0,
+ "modified": "2026-09-11 17:01:27.420017",
+ "modified_by": "Administrator",
+ "name": "Vendor Satisfaction Survey Tour Step",
+ "owner": "Administrator",
+ "reference_document": "Vendor Satisfaction Survey",
+ "show_form_tour": 0,
+ "show_full_form": 0,
+ "title": "Take the Satisfaction Survey Tour",
+ "validate_action": 1
+}
