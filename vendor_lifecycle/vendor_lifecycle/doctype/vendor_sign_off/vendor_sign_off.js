@@ -94,20 +94,28 @@ frappe.ui.form.on("Vendor Sign Off", {
 		if (!frm.is_new() && frm.doc.docstatus === 0 && frm.doc.supplier_email && !frm.doc.sign_off_failed) {
 			frm.add_custom_button(__("Send Email"), () => {
 				const recipients = [frm.doc.supplier_email, frm.doc.additional_email].filter(Boolean).join(", ");
-				frappe.confirm(
-					__("Send the Sign-off email to {0}?", [recipients]),
-					() => {
-						frm.call("send_signoff_email").then((r) => {
-							if (r.message) {
-								frappe.msgprint({
-									title: __("Email Sent"),
-									indicator: "green",
-									message: __("Sent to {0}.", [r.message.sent_to.join(", ")]),
-								});
-							}
-						});
-					}
-				);
+				// Nothing server-side stops this being sent more than once —
+				// the only real duplicate-send guard is this confirm text
+				// itself calling out that it already went out, so a repeat
+				// click (or coming back to it later) isn't silently treated
+				// as the first send.
+				const message = frm.doc.last_reminder_sent
+					? __("This Sign-off email was already sent on {0} — send it again to {1}?", [
+							frappe.datetime.str_to_user(frm.doc.last_reminder_sent),
+							recipients,
+					  ])
+					: __("Send the Sign-off email to {0}?", [recipients]);
+				frappe.confirm(message, () => {
+					frm.call("send_signoff_email").then((r) => {
+						if (r.message) {
+							frappe.msgprint({
+								title: __("Email Sent"),
+								indicator: "green",
+								message: __("Sent to {0}.", [r.message.sent_to.join(", ")]),
+							});
+						}
+					});
+				});
 			});
 		}
 
@@ -122,10 +130,11 @@ frappe.ui.form.on("Vendor Sign Off", {
 			&& (!frm.doc.signed_contract || (frm.doc.code_of_conduct_acknowledged && !frm.doc.code_of_conduct_document))
 		) {
 			frm.add_custom_button(__("Send Follow-up"), () => {
-				frappe.confirm(
-					__("Send a follow-up reminder about the still-missing signed document(s)?"),
-					() => frm.call("send_signoff_followup").then(() => frm.reload_doc())
-				);
+				const message =
+					frm.doc.last_reminder_sent === frappe.datetime.get_today()
+						? __("A Sign-off email was already sent today — send another follow-up anyway?")
+						: __("Send a follow-up reminder about the still-missing signed document(s)?");
+				frappe.confirm(message, () => frm.call("send_signoff_followup").then(() => frm.reload_doc()));
 			});
 		}
 	},

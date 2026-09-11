@@ -39,19 +39,26 @@ frappe.ui.form.on("Vendor Deboarding Checklist", {
 		// Off's send_signoff_email() does for its own Contract attachment.
 		if (frm.doc.docstatus === 0 && !frm.doc.signed_clearance_certificate) {
 			frm.add_custom_button(__("Send Clearance Certificate"), () => {
-				frappe.confirm(
-					__("Email the clearance certificate to the Supplier for signing?"),
-					() => frm.call("send_clearance_certificate_email").then(() => frm.reload_doc())
-				);
+				// Nothing server-side stops this being sent more than once —
+				// the confirm text calling out that it already went out is
+				// the only real duplicate-send guard, so a repeat click
+				// isn't silently treated as the first send.
+				const message = frm.doc.last_reminder_sent
+					? __("The clearance certificate was already emailed on {0} — send it again?", [
+							frappe.datetime.str_to_user(frm.doc.last_reminder_sent),
+					  ])
+					: __("Email the clearance certificate to the Supplier for signing?");
+				frappe.confirm(message, () => frm.call("send_clearance_certificate_email").then(() => frm.reload_doc()));
 			});
 		}
 
 		if (frm.doc.docstatus === 0 && !frm.doc.signed_clearance_certificate && frm.doc.last_reminder_sent) {
 			frm.add_custom_button(__("Send Follow-up"), () => {
-				frappe.confirm(
-					__("Send a follow-up reminder to the Supplier about the signed clearance certificate?"),
-					() => frm.call("send_clearance_certificate_followup").then(() => frm.reload_doc())
-				);
+				const message =
+					frm.doc.last_reminder_sent === frappe.datetime.get_today()
+						? __("A clearance certificate email was already sent today — send another follow-up anyway?")
+						: __("Send a follow-up reminder to the Supplier about the signed clearance certificate?");
+				frappe.confirm(message, () => frm.call("send_clearance_certificate_followup").then(() => frm.reload_doc()));
 			});
 		}
 
