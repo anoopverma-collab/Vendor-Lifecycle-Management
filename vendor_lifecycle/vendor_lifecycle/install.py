@@ -187,6 +187,8 @@ def after_migrate():
 	sync_standard_files()
 	resync_default_email_template_styling()
 	migrate_reference_check_mandatory_setting()
+	backfill_kyc_billing_currency()
+	backfill_team_size_buckets()
 	backfill_settings_defaults()
 	backfill_default_satisfaction_rating_template()
 	backfill_last_satisfaction_survey_date()
@@ -1325,6 +1327,76 @@ SETTINGS_FIELD_DEFAULTS = {
 	"support_ticket_emails": 1,
 	"support_ticket_escalation_emails": 1,
 }
+
+
+TEAM_SIZE_BUCKETS = ("0-50", "51-100", "101-150", "150+")
+
+
+def _team_size_bucket_for(raw_value):
+	try:
+		count = int(raw_value)
+	except (TypeError, ValueError):
+		return None
+	if count <= 50:
+		return "0-50"
+	if count <= 100:
+		return "51-100"
+	if count <= 150:
+		return "101-150"
+	return "150+"
+
+
+def backfill_team_size_buckets():
+	# team_size on both Vendor Onboarding Request and Vendor KYC was
+	# converted from a plain number field to a Select of 4 fixed size
+	# ranges — any value already stored as a raw number (e.g. 11, 1200)
+	# no longer matches any of those options and would show as an
+	# unrecognized/blank value on an existing record. Maps each one into
+	# its matching bucket, once; a value already one of the 4 valid
+	# bucket strings (from a fresh save after this change) is left alone,
+	# which is also what keeps this safe to run on every migrate.
+	for doctype in ("Vendor Onboarding Request", "Vendor KYC"):
+		rows = frappe.get_all(doctype, fields=["name", "team_size"], filters={"team_size": ["is", "set"]})
+		for row in rows:
+			if row.team_size in TEAM_SIZE_BUCKETS:
+				continue
+			bucket = _team_size_bucket_for(row.team_size)
+			if bucket:
+				frappe.db.set_value(doctype, row.name, "team_size", bucket)
+
+
+def backfill_kyc_billing_currency():
+	# billing_currency became mandatory on Vendor KYC without a backfill for
+	# already-existing records at the time — confirmed on two separate
+	# sites to leave old records permanently stuck (can't be saved again
+	# through any path, including an internal re-save, until someone fills
+	# it in by hand) since Frappe doesn't retroactively validate a newly-
+	# mandatory field against rows that already existed. Fixing that gap
+	# here, following the same "backfill every existing row" rule used
+	# throughout this file (see e.g. backfill_missing_compliance_check_
+	# template) — a record found once should never get stuck again.
+	#
+	# Prefers the linked Supplier's own default_currency (set by staff for
+	# that specific vendor) over the site's own Global Defaults currency,
+	# since that's the more specific, more likely-correct value when it's
+	# actually set.
+	affected = frappe.get_all(
+		"Vendor KYC", filters={"billing_currency": ["in", ["", None]]}, fields=["name", "supplier"]
+	)
+	if not affected:
+		return
+
+	site_default_currency = frappe.db.get_single_value("Global Defaults", "default_currency")
+	for row in affected:
+		currency = None
+		if row.supplier:
+			currency = frappe.db.get_value("Supplier", row.supplier, "default_currency")
+		currency = currency or site_default_currency
+		if not currency:
+			# No currency configured anywhere on the site to fall back to —
+			# nothing safe to backfill with; leave it for a human to set.
+			continue
+		frappe.db.set_value("Vendor KYC", row.name, "billing_currency", currency)
 
 
 def backfill_settings_defaults():
