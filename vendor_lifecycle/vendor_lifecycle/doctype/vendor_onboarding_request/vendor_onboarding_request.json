@@ -215,11 +215,11 @@
    "options": "<p class=\"text-muted\">Kindly select Business Type above to fill Business Details.</p>"
   },
   {
-   "depends_on": "eval:doc.business_type",
+   "depends_on": "eval:doc.business_type && ![\"Trader\", \"Service Provider\", \"Logistics / Transporter\", \"Raw Material Supplier\", \"Equipment / Machinery Supplier\", \"Technology / Software Vendor\", \"Facility / Maintenance Services\", \"Freelancer / Consultant\"].includes(doc.business_type)",
    "fieldname": "estimated_monthly_production_capacity",
    "fieldtype": "Int",
    "label": "Estimated Monthly Production Capacity",
-   "mandatory_depends_on": "eval:doc.business_type"
+   "mandatory_depends_on": "eval:[\"Manufacturer\", \"Contractor / Job Worker\"].includes(doc.business_type)"
   },
   {
    "depends_on": "eval:doc.business_type",
@@ -251,9 +251,10 @@
   {
    "depends_on": "eval:doc.business_type",
    "fieldname": "team_size",
-   "fieldtype": "Int",
+   "fieldtype": "Select",
    "label": "Team Size",
-   "mandatory_depends_on": "eval:doc.business_type"
+   "mandatory_depends_on": "eval:doc.business_type",
+   "options": "\n0-50\n51-100\n101-150\n150+"
   },
   {
    "depends_on": "eval:doc.business_type",
