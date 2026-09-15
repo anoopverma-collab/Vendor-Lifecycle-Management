@@ -262,22 +262,26 @@ function toggle_checklist_items_add_row(frm) {
 }
 
 function toggle_licenses_add_row(frm) {
-	// Same reasoning and mechanism as toggle_checklist_items_add_row.
+	// Same reasoning and mechanism as toggle_checklist_items_add_row — but
+	// only license_type itself is ever populated from the template (see
+	// load_licenses_from_template), so only that column gets locked.
+	// issuing_authority has no template-driven source at all; locking it
+	// too would leave it permanently blank with no way to ever fill it in.
 	const locked = !!frm.doc.license_template;
 	frm.set_df_property("licenses", "cannot_add_rows", locked);
 	frm.set_df_property("licenses", "cannot_delete_rows", locked);
 	frm.fields_dict.licenses.grid.update_docfield_property("license_type", "read_only", locked);
-	frm.fields_dict.licenses.grid.update_docfield_property("issuing_authority", "read_only", locked);
 	frm.fields_dict.licenses.grid.refresh();
 }
 
 function toggle_insurance_certificates_add_row(frm) {
-	// Same reasoning and mechanism as toggle_checklist_items_add_row.
+	// Same reasoning as toggle_licenses_add_row above — only insurance_type
+	// comes from the template (see load_insurance_from_template); insurer
+	// always needs to be filled in by hand, template or not.
 	const locked = !!frm.doc.insurance_template;
 	frm.set_df_property("insurance_certificates", "cannot_add_rows", locked);
 	frm.set_df_property("insurance_certificates", "cannot_delete_rows", locked);
 	frm.fields_dict.insurance_certificates.grid.update_docfield_property("insurance_type", "read_only", locked);
-	frm.fields_dict.insurance_certificates.grid.update_docfield_property("insurer", "read_only", locked);
 	frm.fields_dict.insurance_certificates.grid.refresh();
 }
 

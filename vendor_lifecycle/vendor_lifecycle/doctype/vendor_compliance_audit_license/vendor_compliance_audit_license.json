@@ -39,7 +39,8 @@
    "in_list_view": 1,
    "label": "Issuing Authority",
    "options": "Issuing Authority",
-   "link_filters": "[[\"Issuing Authority\",\"disabled\",\"=\",0]]"
+   "link_filters": "[[\"Issuing Authority\",\"disabled\",\"=\",0]]",
+   "reqd": 1
   },
   {
    "fieldname": "valid_from",
