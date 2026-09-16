@@ -412,8 +412,40 @@ def remove_stale_module_directory(subfolder, name):
 # matching page, and keep doing so on every visit until dismissed. That
 # also means these two don't auto-chain into each other (Frappe only
 # supports that via the ui_tour=1 auto-trigger path) - each is independent.
+VENDOR_LIFECYCLE_FORM_TOURS = [
+	"Vendor KYC Tour",
+	"Vendor Onboarding Request Tour",
+	"Vendor Deboarding Request Tour",
+	"Vendor Deboarding Checklist Tour",
+	"Vendor Satisfaction Survey Tour",
+]
+
+
+def backfill_form_tour_step_positions():
+	# Every step in these tours was originally created with position="Left"
+	# - fine for a field with room to its left, but for a field sitting
+	# close to the left edge of the content area (e.g. Business Type, the
+	# first field in its own section) the tooltip renders mostly off the
+	# left edge of the screen, clipped and unreadable (confirmed via a
+	# real screenshot). "Bottom" is Frappe's own default position for
+	# exactly this reason (see Form Tour Step's own "position" field
+	# default) and has no equivalent edge-clipping risk.
+	# _install_sample_form_tours() below only ever creates these once
+	# (a frappe.db.exists check) - a site that already has them installed
+	# needs this explicit one-time fix instead of a fresh create. Runs
+	# every migrate, but only ever touches a step still set to "Left".
+	for tour_name in VENDOR_LIFECYCLE_FORM_TOURS:
+		if not frappe.db.exists("Form Tour", tour_name):
+			continue
+		frappe.db.sql(
+			"update `tabForm Tour Step` set position = 'Bottom' where parent = %s and position = 'Left'",
+			(tour_name,),
+		)
+
+
 def install_getting_started_sample():
 	_install_sample_form_tours()
+	backfill_form_tour_step_positions()
 	_install_sample_module_onboarding()
 
 
@@ -447,7 +479,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Check",
 					"label": "Verified by External Agency",
 					"description": "Either pick internal verifiers below, or tick this to hand verification to an outside agency instead.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 				{
 					"title": "Firm Name",
@@ -455,7 +487,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Data",
 					"label": "Firm Name",
 					"description": "Carried over from the Onboarding Request - double-check it's correct. Mandatory.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 				{
 					"title": "Legal Entity Type",
@@ -463,7 +495,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Select",
 					"label": "Legal Entity Type",
 					"description": "How this vendor is legally structured - Sole Proprietorship, Private Limited, Partnership, and so on. Mandatory.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 				{
 					"title": "Billing Currency",
@@ -471,7 +503,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Link",
 					"label": "Billing Currency",
 					"description": "The Supplier Setup section - which currency this vendor is billed and paid in.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 				{
 					"title": "Contact Person Name",
@@ -479,7 +511,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Data",
 					"label": "Contact Person Name",
 					"description": "The Contact tab - who to reach at this vendor for day-to-day communication. Mandatory.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 				{
 					"title": "Contact Person Number",
@@ -487,7 +519,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Phone",
 					"label": "Contact Person Number",
 					"description": "A direct phone number for the Contact Person above. Mandatory.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 				{
 					"title": "Official Email",
@@ -495,7 +527,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Data",
 					"label": "Official Email",
 					"description": "Where every KYC-related email to this vendor goes. Mandatory.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 				{
 					"title": "Address Line 1",
@@ -503,7 +535,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Data",
 					"label": "Address Line 1",
 					"description": "The Address tab - the first line of this vendor's full postal address, used for the GSTIN checks further on for India-based vendors. Mandatory.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 				{
 					"title": "City",
@@ -511,7 +543,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Data",
 					"label": "City",
 					"description": "The city this vendor's registered address is in. Mandatory.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 				{
 					"title": "Country",
@@ -519,7 +551,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Link",
 					"label": "Country",
 					"description": "Mandatory - also decides whether the India-specific PAN/GSTIN fields on the Tax & Compliance tab show up.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 				{
 					"title": "Postal / ZIP Code",
@@ -527,7 +559,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Data",
 					"label": "Postal / ZIP Code",
 					"description": "The postal or ZIP code for the address above. Mandatory.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 				{
 					"title": "Business Type",
@@ -535,7 +567,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Select",
 					"label": "Business Type",
 					"description": "The Business Details tab - once you pick a Business Type, extra fields specific to that type of vendor appear below it. Mandatory.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 				{
 					"title": "Tax & Compliance",
@@ -543,7 +575,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Data",
 					"label": "Tax ID (PAN / VAT / EIN, etc.)",
 					"description": "PAN, GSTIN, business registration, and compliance certificates all live on this tab.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 				{
 					"title": "Bank Details",
@@ -551,7 +583,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Data",
 					"label": "Bank Account Name",
 					"description": "Needed before any payment can be made to this vendor.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 			],
 		}).insert(ignore_permissions=True)
@@ -581,7 +613,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Data",
 					"label": "Company / Firm Name",
 					"description": "The vendor's registered company or firm name.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 				{
 					"title": "Business Type",
@@ -589,7 +621,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Select",
 					"label": "Business Type",
 					"description": "What the vendor does - once you pick one, an \"About Your Business\" section appears further down with extra fields specific to that type of vendor.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 				{
 					"title": "Contact & Address",
@@ -597,7 +629,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Data",
 					"label": "Contact Person",
 					"description": "This section covers the vendor's basic reachability - Contact Person, Phone, Email, and full Address.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 				{
 					"title": "Profile & Catalogue",
@@ -605,7 +637,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Attach",
 					"label": "Business / Capability Profile",
 					"description": "Optional supporting documents - a company profile, product catalogue, or anything else worth attaching.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 			],
 		}).insert(ignore_permissions=True)
@@ -628,7 +660,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Link",
 					"label": "Vendor",
 					"description": "Who's being deboarded. Mandatory.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 				{
 					"title": "Reason",
@@ -636,7 +668,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Small Text",
 					"label": "Reason",
 					"description": "Why this vendor is being deboarded. Mandatory.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 				{
 					"title": "Is the Issue Resolvable?",
@@ -644,7 +676,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Select",
 					"label": "Is the Issue with the Vendor Resolvable?",
 					"description": "A judgment call on whether this could still be fixed rather than ending the relationship. Mandatory.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 				{
 					"title": "Ratings",
@@ -652,7 +684,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Table",
 					"label": "Ratings",
 					"description": "Score every row here before this request can be saved - a final performance record for this vendor.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 			],
 		}).insert(ignore_permissions=True)
@@ -670,7 +702,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Link",
 					"label": "Checklist Template",
 					"description": "Which template this Checklist's tasks were loaded from. Mandatory.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 				{
 					"title": "Company",
@@ -678,7 +710,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Link",
 					"label": "Company",
 					"description": "Which Company this Checklist belongs to - used to resolve the GSTIN shown on the clearance certificate email.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 				{
 					"title": "Additional Email",
@@ -686,7 +718,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Data",
 					"label": "Additional Supplier Email",
 					"description": "An extra recipient for the clearance certificate email, alongside the vendor's own KYC/Supplier contacts.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 				{
 					"title": "Checklist Items",
@@ -694,7 +726,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Table",
 					"label": "Checklist Items",
 					"description": "Every task needs a status (Completed/Invalid/Unable to Complete) and at least one assignee before this Checklist can be submitted.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 				{
 					"title": "Clearance",
@@ -702,7 +734,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Check",
 					"label": "No Clearance Certificate Available",
 					"description": "Attach the signed clearance certificate below, or tick this and give a reason if one genuinely isn't available.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 			],
 		}).insert(ignore_permissions=True)
@@ -720,7 +752,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Link",
 					"label": "Vendor",
 					"description": "Which vendor this survey is scoring. Mandatory.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 				{
 					"title": "Period",
@@ -728,7 +760,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Select",
 					"label": "Period",
 					"description": "Which period this survey covers. Mandatory.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 				{
 					"title": "Survey Date",
@@ -736,7 +768,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Date",
 					"label": "Survey Date",
 					"description": "When this survey was conducted. Mandatory.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 				{
 					"title": "Ratings",
@@ -744,7 +776,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Table",
 					"label": "Ratings",
 					"description": "Score every criteria row here - the actual satisfaction scoring for this vendor.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 				{
 					"title": "Feedback",
@@ -752,7 +784,7 @@ def _install_sample_form_tours():
 					"fieldtype": "Small Text",
 					"label": "Areas of Concern",
 					"description": "The Feedback section - Areas of Concern and Suggestions for Improvement, both optional free text.",
-					"position": "Left",
+					"position": "Bottom",
 				},
 			],
 		}).insert(ignore_permissions=True)
