@@ -7,3 +7,5 @@
 vendor_lifecycle.patches.seed_master_data_once
 vendor_lifecycle.patches.seed_email_templates_once
 vendor_lifecycle.patches.seed_vendor_kyc_workflow_once
+vendor_lifecycle.patches.seed_sampling_mandatory_business_types_once
+vendor_lifecycle.patches.seed_form_tours_once

@@ -137,56 +137,21 @@ def after_install():
 	after_migrate()
 
 
-# Any string that only appears in the current _signoff_email_shell() output —
-# used to tell an already-restyled template apart from one still carrying the
-# older, plainer shell.
-EMAIL_TEMPLATE_STYLE_MARKER = "box-shadow:0 2px 10px"
-
-
-def resync_default_email_template_styling():
-	# The backfill_default_*_email_template*() calls below are all
-	# "create if missing" — once a template exists in the DB, editing its
-	# HTML here has no effect on migrate. Delete any default template still
-	# carrying the old, unstyled shell so the very next backfill call in
-	# after_migrate() recreates it fresh with the current styling. Once a
-	# template's response carries the marker, this is a no-op for it forever.
-	names = [
-		DEFAULT_SIGNOFF_EMAIL_TEMPLATE,
-		DEFAULT_SIGNOFF_RECEIVED_EMAIL_TEMPLATE,
-		DEFAULT_SIGNOFF_PASSED_EMAIL_TEMPLATE,
-		DEFAULT_SIGNOFF_FAILED_EMAIL_TEMPLATE,
-		DEFAULT_VENDOR_LIFECYCLE_PASSED_EMAIL_TEMPLATE,
-		DEFAULT_VENDOR_LIFECYCLE_FAILED_EMAIL_TEMPLATE,
-		DEFAULT_ONBOARDING_RECEIVED_EMAIL_TEMPLATE,
-		DEFAULT_ONBOARDING_NEW_REQUEST_EMAIL_TEMPLATE,
-		DEFAULT_SATISFACTION_SURVEY_CREATED_EMAIL_TEMPLATE,
-		DEFAULT_SATISFACTION_SURVEY_REMINDER_EMAIL_TEMPLATE,
-		DEFAULT_SUPPORT_TICKET_CREATED_EMAIL_TEMPLATE,
-		DEFAULT_SUPPORT_TICKET_NEW_TICKET_ALERT_EMAIL_TEMPLATE,
-		DEFAULT_SUPPORT_TICKET_RESOLVED_EMAIL_TEMPLATE,
-		DEFAULT_SUPPORT_TICKET_REOPENED_EMAIL_TEMPLATE,
-		DEFAULT_SUPPORT_TICKET_ESCALATION_EMAIL_TEMPLATE,
-		DEFAULT_DEBOARDING_REQUEST_CREATED_EMAIL_TEMPLATE,
-		DEFAULT_DEBOARDING_REQUEST_REJECTED_EMAIL_TEMPLATE,
-		DEFAULT_DEBOARDING_REQUEST_APPROVED_EMAIL_TEMPLATE,
-		DEFAULT_CHECKLIST_TASK_ASSIGNED_EMAIL_TEMPLATE,
-		DEFAULT_CHECKLIST_TASK_REMINDER_EMAIL_TEMPLATE,
-		DEFAULT_CLEARANCE_CERTIFICATE_EMAIL_TEMPLATE,
-		DEFAULT_CLEARANCE_CERTIFICATE_RECEIVED_EMAIL_TEMPLATE,
-		DEFAULT_CLEARANCE_CERTIFICATE_FOLLOWUP_EMAIL_TEMPLATE,
-		DEFAULT_SIGNOFF_FOLLOWUP_EMAIL_TEMPLATE,
-		DEFAULT_MANUAL_ATTACH_NEEDED_EMAIL_TEMPLATE,
-	]
-	for name in names:
-		response = frappe.db.get_value("Email Template", name, "response")
-		if response and EMAIL_TEMPLATE_STYLE_MARKER not in response:
-			frappe.db.delete("Email Template", {"name": name})
+# There used to be a resync_default_email_template_styling() here, run on
+# every migrate, that deleted any default Email Template still missing a
+# style marker so the (then-every-migrate) backfill_default_*_email_
+# template*() calls right after it would recreate it freshly restyled.
+# Once those became a one-time patch (see patches/seed_email_templates_
+# once.py), that delete-then-recreate handoff broke — a template still
+# missing the marker would be deleted with nothing left to bring it back.
+# Removed rather than reworked: forcing a re-style by deleting the
+# existing record is the same "overwrite a deliberate customization"
+# problem this whole round of fixes was about — a site that had edited
+# its own copy of a template would have had it silently replaced too.
 
 
 def after_migrate():
 	sync_standard_files()
-	resync_default_email_template_styling()
-	migrate_reference_check_mandatory_setting()
 	backfill_kyc_billing_currency()
 	backfill_team_size_buckets()
 	backfill_settings_defaults()
@@ -220,14 +185,6 @@ def after_migrate():
 	remove_stale_web_form("vendor-signoff-upload")
 	remove_stale_setting("enforce_sequential_stages")
 	remove_stale_setting("sampling_mandatory")
-	# default_deboarding_rating_template/default_checklist_template are set
-	# once by the seed_vendor_lifecycle_master_data patch (post_model_sync,
-	# runs before after_migrate hooks on every migrate) - that ordering is
-	# what backfill_sampling_mandatory_business_types() below still relies
-	# on for its own full settings.save(); ignore_mandatory=True on that
-	# save() is a second safety net, but keeping the real dependency order
-	# is still the correct fix, not just a workaround.
-	backfill_sampling_mandatory_business_types()
 	migrate_background_check_result_method_off_average()
 	remove_stale_setting("minimum_average_rating")
 	remove_stale_web_form("vendor-satisfaction-survey")
@@ -417,8 +374,13 @@ def backfill_form_tour_step_positions():
 
 
 def install_getting_started_sample():
-	_install_sample_form_tours()
-	backfill_form_tour_step_positions()
+	# _install_sample_form_tours()/backfill_form_tour_step_positions() are
+	# NOT called here - Form Tour has no committed JSON file backing it
+	# (unlike Module Onboarding/Onboarding Step below, which Frappe's own
+	# core file-sync keeps recreating from their files regardless of what
+	# runs here), so they used to re-check and recreate themselves on every
+	# migrate the same way the master data did. Moved to their own one-time
+	# patch instead (see patches/seed_form_tours_once.py).
 	_install_sample_module_onboarding()
 
 
@@ -895,23 +857,17 @@ REMOVED_CLIENT_SCRIPTS = [
 ]
 
 
-def migrate_reference_check_mandatory_setting():
-	# "Vendor Reference Check" was renamed to "Vendor Background Check" and
-	# merged with what used to be Compliance Audit's background-check
-	# fields — carry over whatever an admin had already set for the old
-	# "reference_check_mandatory" toggle before its column gets dropped,
-	# rather than silently resetting to the new field's own default.
-	# "Vendor Lifecycle Settings" is a Single — its field values live in the
-	# shared `tabSingles` table, not a dedicated table, so column existence
-	# has to be checked there rather than with has_column().
-	if frappe.db.exists(
-		"Singles", {"doctype": "Vendor Lifecycle Settings", "field": "reference_check_mandatory"}
-	) and not frappe.db.exists(
-		"Singles", {"doctype": "Vendor Lifecycle Settings", "field": "background_check_mandatory"}
-	):
-		old_value = frappe.db.get_single_value("Vendor Lifecycle Settings", "reference_check_mandatory")
-		if old_value is not None:
-			frappe.db.set_single_value("Vendor Lifecycle Settings", "background_check_mandatory", old_value)
+# There used to be a migrate_reference_check_mandatory_setting() here, a
+# one-time carry-over for an old "reference_check_mandatory" Settings
+# checkbox from back when this app had a separate "Vendor Reference Check"
+# doctype (long since renamed/merged into Vendor Background Check).
+# Removed: its own existence check used the same broken frappe.db.exists(
+# "Singles", {...}) pattern found and fixed elsewhere in this file, so it
+# had never actually run on any site. Confirmed safe to just delete rather
+# than fix - the old field has zero rows in the database, the doctype it
+# was about doesn't exist anymore, and the new field (background_check_
+# mandatory) already gets a correct value through the unrelated, already-
+# fixed backfill_settings_defaults() instead.
 
 
 # "NDC" (No Dues Certificate) was renamed to the region-neutral "Clearance
