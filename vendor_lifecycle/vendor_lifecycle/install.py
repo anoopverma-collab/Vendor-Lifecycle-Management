@@ -190,7 +190,6 @@ def after_migrate():
 	backfill_kyc_billing_currency()
 	backfill_team_size_buckets()
 	backfill_settings_defaults()
-	backfill_default_satisfaction_rating_template()
 	backfill_last_satisfaction_survey_date()
 	rename_ndc_terminology()
 	migrate_onboarding_request_to_submittable()
@@ -207,21 +206,9 @@ def after_migrate():
 		remove_stale_client_script(name)
 	backfill_missing_compliance_check_template()
 	backfill_result_method_resolved()
-	_ensure_default_checklist_template()
 	rename_estimated_monthly_capacity()
 	migrate_facility_applicable_to_yes_no()
 	backfill_license_insurance_masters()
-	backfill_default_compliance_check_sources()
-	backfill_default_coverage_types()
-	backfill_default_licenses_and_permits_masters()
-	remove_stale_generic_insurers()
-	backfill_default_insurance_masters()
-	# Must run after backfill_default_satisfaction_rating_template() above
-	# — it reuses the same Rating Criteria rows that function creates,
-	# even though it also re-ensures them defensively itself.
-	backfill_default_rating_criteria_template()
-	backfill_default_sampling_evaluation_template()
-	seed_indian_states()
 	migrate_signoff_email_settings_to_vendor_lifecycle()
 	backfill_default_signoff_email_template()
 	backfill_default_signoff_received_email_template()
@@ -241,14 +228,13 @@ def after_migrate():
 	remove_stale_web_form("vendor-signoff-upload")
 	remove_stale_setting("enforce_sequential_stages")
 	remove_stale_setting("sampling_mandatory")
-	# Both of these must run before backfill_sampling_mandatory_business_
-	# types() - it does a full settings.save(), which used to validate every
-	# mandatory field on this Settings singleton, including the two these
-	# backfill. ignore_mandatory=True on that save() is a second safety net
-	# now, but keeping the real dependency order here is still the correct
-	# fix, not just a workaround.
-	backfill_default_deboarding_rating_template()
-	backfill_default_deboarding_checklist_template()
+	# default_deboarding_rating_template/default_checklist_template are set
+	# once by the seed_vendor_lifecycle_master_data patch (post_model_sync,
+	# runs before after_migrate hooks on every migrate) - that ordering is
+	# what backfill_sampling_mandatory_business_types() below still relies
+	# on for its own full settings.save(); ignore_mandatory=True on that
+	# save() is a second safety net, but keeping the real dependency order
+	# is still the correct fix, not just a workaround.
 	backfill_sampling_mandatory_business_types()
 	migrate_background_check_result_method_off_average()
 	remove_stale_setting("minimum_average_rating")
@@ -1284,16 +1270,14 @@ def migrate_compliance_checks_to_child_table():
 	# (Background Check, Sanctions/PEP, Criminal Record, Credit Check,
 	# Debarment Check) were consolidated into one repeatable "Compliance
 	# Checks" table, so a deployment can add its own check types later
-	# without a schema change. This seeds the standard check types every
-	# migrate (cheap, idempotent), then — once — carries over any non-
-	# default data already sitting in the old columns.
+	# without a schema change. Standard check types + the default template
+	# are seeded once by the seed_vendor_lifecycle_master_data patch, not
+	# here — this now only ever carries over any non-default data already
+	# sitting in the old columns, once.
 	#
 	# The old columns themselves are left as harmless orphans rather than
 	# dropped here — same ImplicitCommitError reason as the other
 	# migrations in this file.
-	_ensure_compliance_check_types()
-	_ensure_default_compliance_check_template()
-
 	if not frappe.db.has_column("Vendor Background Check", "background_check_status"):
 		return
 
@@ -1441,8 +1425,20 @@ def backfill_settings_defaults():
 	# value: a Check field backfilled to "1" is legitimately "0" once an
 	# admin unchecks it, and a falsy-value check would keep flipping it
 	# back to the default on every migrate.
+	#
+	# frappe.db.exists("Singles", {...}) does NOT work for this - Singles
+	# is a special internal storage table, not a normal doctype, and that
+	# call silently returns falsy even when a row genuinely exists.
+	# Confirmed directly against the database: every field in this dict
+	# was being unconditionally reset to its default on every single
+	# migrate, silently undoing anything an admin had deliberately
+	# changed. frappe.db.get_singles_dict() is what Frappe's own core
+	# uses internally to load a Single doctype's real stored values -
+	# checking key presence in that dict is the actual reliable way to
+	# tell "never configured" apart from "deliberately set to 0/blank".
+	existing_fields = frappe.db.get_singles_dict("Vendor Lifecycle Settings")
 	for fieldname, default in SETTINGS_FIELD_DEFAULTS.items():
-		if not frappe.db.exists("Singles", {"doctype": "Vendor Lifecycle Settings", "field": fieldname}):
+		if fieldname not in existing_fields:
 			frappe.db.set_single_value("Vendor Lifecycle Settings", fieldname, default)
 
 
