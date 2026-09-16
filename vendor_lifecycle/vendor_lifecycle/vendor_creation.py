@@ -631,6 +631,31 @@ def send_vendor_lifecycle_email(doctype, name, template_name, context, recipient
 	if not recipients:
 		return
 	if not frappe.db.exists("Email Template", template_name):
+		# Best-effort on purpose (see docstring) - but a missing template
+		# used to fail this silently with no trace anywhere, which made a
+		# deleted template indistinguishable from "nothing to send this
+		# time". Logged to Error Log (for an admin), and now also as a
+		# Comment directly on the document itself (for whoever's actually
+		# looking at it — same self.add_comment("Comment", ...) pattern
+		# used everywhere else in this app) - neither one blocks whatever
+		# real state change this was reporting on.
+		frappe.log_error(
+			title=f"{doctype}: email not sent, template missing",
+			message=f"Email Template {template_name!r} does not exist. Recipients: {recipients}",
+		)
+		try:
+			frappe.get_doc(doctype, name).add_comment(
+				"Comment",
+				text=frappe._("An email could not be sent — the {0} Email Template is missing.").format(
+					frappe.bold(template_name)
+				),
+			)
+		except Exception:
+			# The Error Log entry above is the guaranteed record of this —
+			# never let a failure while merely adding a Comment escalate
+			# into breaking this best-effort function's own no-raise
+			# contract.
+			pass
 		return
 
 	template = frappe.get_doc("Email Template", template_name)
