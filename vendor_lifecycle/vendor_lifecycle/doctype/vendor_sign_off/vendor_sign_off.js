@@ -27,12 +27,25 @@ frappe.ui.form.on("Vendor Sign Off", {
 
 			// Always confirm before submitting — same pattern as
 			// Compliance Audit / Sampling Evaluation / Background Check:
-			// the message makes the consequence explicit (Failed disables
-			// the vendor) so the reviewer isn't surprised by a side effect
-			// they didn't see coming.
-			const message = result.sign_off_failed
-				? __("Mark this Sign-off as Failed and submit? The vendor will be disabled.")
-				: __("Submit this Sign-off? The vendor will be activated.");
+			// the message makes the consequence explicit so the reviewer
+			// isn't surprised by a side effect they didn't see coming. For
+			// a Renewal, disabling/re-enabling the vendor isn't automatic
+			// the way it is for Onboarding/Reboarding — it only happens if
+			// the relevant Settings checkbox is on — so the message says
+			// so instead of promising something that might not happen.
+			let message;
+			if (frm.doc.is_renewal) {
+				message = result.sign_off_failed
+					? __(
+							"Mark this Renewal as Failed and submit? The vendor is only disabled if \"Disable Vendor"
+								+ " on Contract Expiry/Failure\" is on in Vendor Lifecycle Settings."
+					  )
+					: __("Submit this Renewal?");
+			} else {
+				message = result.sign_off_failed
+					? __("Mark this Sign-off as Failed and submit? The vendor will be disabled.")
+					: __("Submit this Sign-off? The vendor will be activated.");
+			}
 
 			return new Promise((resolve) => {
 				frappe.confirm(
@@ -50,28 +63,23 @@ frappe.ui.form.on("Vendor Sign Off", {
 		});
 	},
 	refresh(frm) {
-		// "Create Sign-off" (from Vendor KYC's "Create" dropdown, or the
-		// per-stage button on Vendor Sampling Evaluation) opens a new
-		// document via frappe.new_doc(doctype, {kyc: ...}) — that prefill
-		// mechanism (route_options) sets the field with a raw property
-		// assignment, not frm.set_value(), so it never fires a "kyc
-		// changed" trigger and vendor (server-side auto-synced from the
-		// KYC's Supplier via sync_vendor_field, but only ever computed
-		// when the document is actually saved) is still blank the moment
-		// the form first renders. Since vendor is both mandatory and
-		// read-only, Frappe's own client-side "fill in mandatory fields"
-		// check would otherwise block the very first save attempt before
-		// the server ever gets a chance to fill it in — an unbreakable
-		// dead end, since the user has no way to type into a read-only
-		// field themselves. refresh() always fires regardless of how kyc
-		// got its value, so this fills vendor in immediately, before any
-		// save is attempted. Same pattern as every other stage doctype.
-		if (frm.is_new() && frm.doc.kyc && !frm.doc.vendor) {
-			frappe.db.get_value("Vendor KYC", frm.doc.kyc, "supplier").then((r) => {
-				if (r.message && r.message.supplier) {
-					frm.set_value("vendor", r.message.supplier);
-				}
-			});
+		// vendor is mandatory but only editable for a Renewal — for
+		// Onboarding/Reboarding it's auto-derived and must arrive already
+		// filled in, so every "Create" button that opens this doctype
+		// (Vendor KYC's own dropdown, Vendor Reboarding Request's own
+		// dropdown, Vendor Sampling Evaluation's own "next stage" button)
+		// resolves vendor itself, synchronously, before opening this form —
+		// no lookup needed here at all.
+
+		// Same reasoning as Vendor Compliance Audit's own identical
+		// refresh() check — Onboarding/Reboarding are only ever legitimate
+		// when they arrive from one of those same "Create" buttons
+		// (kyc/reboarding_request already set — signoff_type's own
+		// read_only_depends_on then locks the field). Opened any other way
+		// (the plain "+ New" button), the only thing left that ever makes
+		// sense to pick by hand is Renewal.
+		if (frm.is_new() && !frm.doc.kyc && !frm.doc.reboarding_request) {
+			frm.set_df_property("signoff_type", "options", "\nRenewal");
 		}
 
 		// Offered directly on the failed record itself, not only from the
@@ -81,10 +89,28 @@ frappe.ui.form.on("Vendor Sign Off", {
 		// Failed, so the button only needs to appear then; if some other,
 		// newer Sign-off already exists for this KYC (this one has since
 		// been superseded), the server throws a clear error rather than
-		// silently doing nothing.
-		if (!frm.is_new() && frm.doc.docstatus === 1 && frm.doc.sign_off_failed) {
+		// silently doing nothing. A Renewal has no such "retry in place"
+		// concept at all (see _require_no_active_signoff_unless_failed's
+		// own is_renewal branch, and stage_sequencing.force_override_
+		// stage's identical exclusion) — no Create-style button of any
+		// kind is offered on a Renewal/Ad-hoc document; the only way to
+		// start another one is the plain "+ New" button.
+		if (!frm.is_new() && frm.doc.docstatus === 1 && frm.doc.sign_off_failed && !frm.doc.is_renewal) {
 			frm.add_custom_button(__("Retry Sign-off"), () => {
-				frappe.new_doc("Vendor Sign Off", { kyc: frm.doc.kyc });
+				// vendor is set explicitly, once the new form is confirmed
+				// to exist, same as every other "Create" button in this
+				// app — handing it over as a plain route_options value
+				// alongside kyc/reboarding_request isn't reliable enough on
+				// its own for a mandatory field.
+				const vendor = frm.doc.vendor;
+				const options = frm.doc.is_reboarding
+					? { reboarding_request: frm.doc.reboarding_request, signoff_type: "Reboarding" }
+					: { kyc: frm.doc.kyc, signoff_type: "Onboarding" };
+				frappe.new_doc("Vendor Sign Off", options).then(() => {
+					if (cur_frm && cur_frm.doctype === "Vendor Sign Off" && cur_frm.is_new()) {
+						cur_frm.set_value("vendor", vendor);
+					}
+				});
 			});
 		}
 

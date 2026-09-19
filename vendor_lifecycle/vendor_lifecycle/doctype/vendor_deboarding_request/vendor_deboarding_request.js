@@ -3,6 +3,41 @@
 
 frappe.ui.form.on("Vendor Deboarding Request", {
 	refresh(frm) {
+		// Same reasoning as Vendor Onboarding/Reboarding Request's own
+		// identical block — exactly one way to create a Checklist (the
+		// "Create" button below), not a second competing one via the
+		// Connections tab's own "+" shortcut.
+		frm.can_make_methods = frm.can_make_methods || {};
+		frm.can_make_methods["Vendor Deboarding Checklist"] = () => false;
+
+		// Same shared style tag Vendor Onboarding Request / Vendor
+		// Reboarding Request's own pipeline progress widgets inject —
+		// reused by id, so it's only ever added to the page once
+		// regardless of which form loads first.
+		if (!document.getElementById("vendor-lifecycle-pipeline-progress-style")) {
+			$("<style>", {
+				id: "vendor-lifecycle-pipeline-progress-style",
+				html: ".progress-bar-not-started { background-color: #000 !important; }",
+			}).appendTo("head");
+		}
+
+		if (frm.doc.docstatus === 1) {
+			const PROGRESS_CLASS = {
+				"Completed": "progress-bar-success",
+				"In Progress": "progress-bar-warning",
+				"Not Started": "progress-bar-not-started",
+			};
+			frm.call("get_pipeline_progress").then((r) => {
+				(r.message || []).forEach((s) => {
+					frm.dashboard.add_progress(
+						s.label,
+						[{ title: s.state, width: "100%", progress_class: PROGRESS_CLASS[s.state] || "progress-bar-not-started" }],
+						`${s.label}: ${s.state}`
+					);
+				});
+			});
+		}
+
 		// The Ratings table is meant to be a fixed set of criteria resolved
 		// from the site's Default Deboarding Rating Template — staff score
 		// the rows, they don't add/remove them.

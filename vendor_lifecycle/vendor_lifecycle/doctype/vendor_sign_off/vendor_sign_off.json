@@ -6,8 +6,12 @@
  "document_type": "Document",
  "engine": "InnoDB",
  "field_order": [
+  "signoff_type",
   "kyc",
   "vendor",
+  "is_reboarding",
+  "is_renewal",
+  "reboarding_request",
   "onboarding_request",
   "previous_failed_sign_off",
   "supplier_email",
@@ -21,6 +25,7 @@
   "section_break_documents",
   "contract",
   "signed_contract",
+  "contract_validity",
   "column_break_documents",
   "code_of_conduct_acknowledged",
   "code_of_conduct",
@@ -32,13 +37,23 @@
  ],
  "fields": [
   {
+   "fieldname": "signoff_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Type",
+   "options": "\nOnboarding\nReboarding\nRenewal",
+   "read_only_depends_on": "eval:doc.kyc || doc.reboarding_request",
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.signoff_type==\"Onboarding\"",
    "fieldname": "kyc",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Vendor KYC",
+   "mandatory_depends_on": "eval:doc.signoff_type==\"Onboarding\"",
    "options": "Vendor KYC",
-   "read_only": 1,
-   "reqd": 1
+   "read_only": 1
   },
   {
    "fieldname": "vendor",
@@ -46,10 +61,36 @@
    "in_list_view": 1,
    "label": "Vendor",
    "options": "Supplier",
-   "read_only": 1,
+   "read_only_depends_on": "eval:doc.signoff_type!=\"Renewal\"",
    "reqd": 1
   },
   {
+   "default": "0",
+   "fieldname": "is_reboarding",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Is Re-boarding",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_renewal",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Is Renewal",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.signoff_type==\"Reboarding\"",
+   "fieldname": "reboarding_request",
+   "fieldtype": "Link",
+   "label": "Vendor Reboarding Request",
+   "mandatory_depends_on": "eval:doc.signoff_type==\"Reboarding\"",
+   "options": "Vendor Reboarding Request",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.signoff_type==\"Onboarding\"",
    "fieldname": "onboarding_request",
    "fieldtype": "Link",
    "label": "Vendor Onboarding Request",
@@ -74,7 +115,7 @@
    "read_only": 1
   },
   {
-   "description": "Optional — an extra recipient for the Sign-off email, in addition to Supplier Email.",
+   "description": "Optional \u2014 an extra recipient for the Sign-off email, in addition to Supplier Email.",
    "fieldname": "additional_email",
    "fieldtype": "Data",
    "label": "Additional Email",
@@ -99,7 +140,7 @@
    "fieldtype": "Column Break"
   },
   {
-   "description": "Optional — used for the Sign-off email's Company Name / GSTIN instead of the Default Company in Global Defaults.",
+   "description": "Optional \u2014 used for the Sign-off email's Company Name / GSTIN instead of the Default Company in Global Defaults.",
    "fieldname": "company",
    "fieldtype": "Link",
    "label": "Company",
@@ -135,6 +176,13 @@
    "fieldname": "signed_contract",
    "fieldtype": "Attach",
    "label": "Signed Contract"
+  },
+  {
+   "depends_on": "eval:!doc.sign_off_failed",
+   "description": "How long this contract is valid for. Whether this is mandatory before submitting is controlled by \"Require Contract Validity\" in Vendor Lifecycle Settings.",
+   "fieldname": "contract_validity",
+   "fieldtype": "Date",
+   "label": "Contract Validity"
   },
   {
    "fieldname": "column_break_documents",
@@ -193,7 +241,7 @@
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2026-09-08 12:00:00.000000",
+ "modified": "2026-09-21 11:00:00.000000",
  "modified_by": "Administrator",
  "module": "Vendor Lifecycle",
  "name": "Vendor Sign Off",

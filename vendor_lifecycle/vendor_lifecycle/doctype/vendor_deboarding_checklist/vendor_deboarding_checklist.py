@@ -10,8 +10,10 @@ from vendor_lifecycle.vendor_lifecycle.doctype.vendor_deboarding_request.vendor_
 	get_open_transaction_details,
 )
 from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
+	VENDOR_LIFECYCLE_STAGE_DEBOARDED,
 	get_kyc_vendor_contact,
 	require_vendor_lifecycle_email_account,
+	resolve_settled_active_stage,
 	send_vendor_lifecycle_email,
 	vendor_lifecycle_cc_list,
 	vendor_lifecycle_doctype_email_enabled,
@@ -488,6 +490,7 @@ class VendorDeboardingChecklist(Document):
 		frappe.db.set_value("Supplier", self.supplier, {
 			"disabled": 1,
 			"vendor_lifecycle_status": "Disabled",
+			"vendor_lifecycle_stage": VENDOR_LIFECYCLE_STAGE_DEBOARDED,
 		})
 		if was_already_disabled:
 			message = frappe._("Supplier {0} was already disabled before this Checklist was submitted.").format(
@@ -528,6 +531,7 @@ class VendorDeboardingChecklist(Document):
 		frappe.db.set_value("Supplier", self.supplier, {
 			"disabled": 0,
 			"vendor_lifecycle_status": "Active",
+			"vendor_lifecycle_stage": resolve_settled_active_stage(self.supplier),
 		})
 		if self.deboarding_request:
 			frappe.db.set_value("Vendor Deboarding Request", self.deboarding_request, "status", "Approved")
@@ -566,28 +570,42 @@ class VendorDeboardingChecklist(Document):
 		return info
 
 	@frappe.whitelist()
-	def temporarily_enable_supplier(self):
+	def toggle_temporary_enable(self):
 		"""A deboarding Checklist has no automatic effect on the vendor
 		beyond disabling it on submit — this is the one exception: a
 		manual, time-boxed re-enable, for when the vendor genuinely needs
 		to transact again for a few days before deboarding actually
-		completes. Auto-reverted by tasks.auto_disable_expired_temporary_
-		enables() once TEMPORARY_ENABLE_DAYS have passed; can be used again
-		afterward for another window."""
+		completes. A single toggle, same mechanism as Vendor Deboarding
+		Request's own Freeze/Unfreeze Supplier button:
+
+		- Not currently temporarily enabled -> enable it. Auto-reverted by
+		  tasks.auto_disable_expired_temporary_enables() once
+		  TEMPORARY_ENABLE_DAYS have passed, if nobody's disabled it
+		  before then.
+		- Currently temporarily enabled -> disable it early instead of
+		  waiting out the rest of the window. This clears
+		  is_temporarily_enabled (and its timestamp) the same way letting
+		  the window expire naturally does, so that nightly sweep finds
+		  nothing left to do here — no redundant "auto-disable an already-
+		  disabled supplier" action, and no stale "temporarily enabled
+		  until X" state left showing on this Checklist.
+
+		Either direction can be repeated afterward for another window."""
 		if self.docstatus != 1:
 			frappe.throw(frappe._("This Checklist must be submitted first."))
 		if not self._can_temporarily_enable():
 			frappe.throw(
-				frappe._("Only a Vendor Lifecycle Manager or System Manager can temporarily enable the supplier."),
-				frappe.PermissionError,
+				frappe._("Only a Vendor Lifecycle Manager or System Manager can do this."), frappe.PermissionError
 			)
+
 		if self.is_temporarily_enabled:
-			expires_on = add_to_date(self.temporarily_enabled_on, days=TEMPORARY_ENABLE_DAYS)
-			frappe.throw(
-				frappe._("This supplier is already temporarily enabled, until {0}.").format(
-					frappe.utils.format_datetime(expires_on)
-				)
-			)
+			frappe.db.set_value("Supplier", self.supplier, {
+				"disabled": 1,
+				"vendor_lifecycle_status": "Disabled",
+			})
+			self.db_set("is_temporarily_enabled", 0)
+			self.db_set("temporarily_enabled_on", None)
+			return {"is_temporarily_enabled": False}
 
 		now = now_datetime()
 		frappe.db.set_value("Supplier", self.supplier, {
@@ -596,7 +614,11 @@ class VendorDeboardingChecklist(Document):
 		})
 		self.db_set("is_temporarily_enabled", 1)
 		self.db_set("temporarily_enabled_on", now)
-		return {"temporarily_enabled_on": now, "expires_on": add_to_date(now, days=TEMPORARY_ENABLE_DAYS)}
+		return {
+			"is_temporarily_enabled": True,
+			"temporarily_enabled_on": now,
+			"expires_on": add_to_date(now, days=TEMPORARY_ENABLE_DAYS),
+		}
 
 
 @frappe.whitelist()

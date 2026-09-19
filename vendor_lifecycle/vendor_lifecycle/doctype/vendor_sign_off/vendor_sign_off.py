@@ -4,27 +4,30 @@
 import frappe
 from frappe.model.document import Document
 
-from vendor_lifecycle.vendor_lifecycle.doctype.vendor_background_check.vendor_background_check import (
-	VENDOR_LIFECYCLE_STATUS_BACKGROUND_VERIFIED,
-)
-from vendor_lifecycle.vendor_lifecycle.doctype.vendor_compliance_audit.vendor_compliance_audit import (
-	VENDOR_LIFECYCLE_STATUS_AUDIT_VERIFIED,
-)
-from vendor_lifecycle.vendor_lifecycle.doctype.vendor_sampling_evaluation.vendor_sampling_evaluation import (
-	VENDOR_LIFECYCLE_STATUS_SAMPLING_APPROVED,
-)
 from vendor_lifecycle.vendor_lifecycle.stage_sequencing import (
 	block_if_onboarding_request_stopped,
 	enforce_sequential_cancellation,
 	enforce_sequential_creation,
 	is_sampling_mandatory,
+	is_sampling_mandatory_for_reboarding,
 	stage_requirement_satisfied,
 )
 from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
-	VENDOR_LIFECYCLE_STATUS_KYC_VERIFIED,
+	VENDOR_LIFECYCLE_STAGE_ONBOARDED,
+	VENDOR_LIFECYCLE_STAGE_ONBOARDING,
+	VENDOR_LIFECYCLE_STAGE_ONBOARDING_FAILED,
+	VENDOR_LIFECYCLE_STAGE_REBOARDED,
+	VENDOR_LIFECYCLE_STAGE_REBOARDING,
+	VENDOR_LIFECYCLE_STAGE_REBOARDING_FAILED,
+	VENDOR_LIFECYCLE_STATUS_ACTIVE,
+	VENDOR_LIFECYCLE_STATUS_DISABLED,
+	VENDOR_LIFECYCLE_STATUS_SIGN_OFF_IN_PROGRESS,
 	get_disable_reason_for_supplier,
+	get_failed_stage_reason,
 	mark_vendor_status_in_progress,
+	require_kyc_unless_reboarding,
 	require_vendor_lifecycle_email_account,
+	resolve_current_stage_status,
 	send_vendor_lifecycle_email,
 	sync_onboarding_request_field,
 	sync_vendor_field,
@@ -32,9 +35,6 @@ from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
 	vendor_lifecycle_doctype_email_enabled,
 	vendor_lifecycle_emails_enabled,
 )
-
-VENDOR_LIFECYCLE_STATUS_ACTIVE = "Active"
-VENDOR_LIFECYCLE_STATUS_SIGN_OFF_IN_PROGRESS = "Sign Off In Progress"
 
 # Hardcoded, by explicit product decision — no longer Settings-configurable
 # Link fields (see install.py's backfill_default_signoff_*_email_template
@@ -50,16 +50,34 @@ DEFAULT_SIGNOFF_FOLLOWUP_EMAIL_TEMPLATE = "Vendor Sign-off Follow-up"
 # clearance-certificate follow-up.
 SIGNOFF_FOLLOWUP_DAYS = 7
 
+DEFAULT_SIGNOFF_RENEWAL_DUE_EMAIL_TEMPLATE = "Sign Off Renewal Due"
+DEFAULT_SIGNOFF_RENEWAL_DRAFT_REMINDER_EMAIL_TEMPLATE = "Sign Off Renewal Draft Reminder"
+
 
 class VendorSignOff(Document):
 	def validate(self):
+		self._derive_type_flags()
 		block_if_onboarding_request_stopped(self)
 		sync_vendor_field(self)
 		sync_onboarding_request_field(self)
+		require_kyc_unless_reboarding(self)
 		enforce_sequential_creation(self)
-		mark_vendor_status_in_progress(self, VENDOR_LIFECYCLE_STATUS_SIGN_OFF_IN_PROGRESS)
 		self._warn_if_no_default_company()
 		self._require_failure_reason_if_failed()
+		# A Renewal never touches vendor_lifecycle_status — see
+		# _handle_renewal_result's own comment for the only two things a
+		# Renewal is allowed to affect (disabled, contract_valid_until).
+		if not self.is_renewal:
+			mark_vendor_status_in_progress(self, VENDOR_LIFECYCLE_STATUS_SIGN_OFF_IN_PROGRESS)
+
+	def _derive_type_flags(self):
+		# signoff_type is the one field the user actually picks;
+		# is_reboarding and is_renewal stay as plain, hidden, auto-computed
+		# booleans so every existing is_reboarding-keyed check elsewhere in
+		# the app keeps working completely unchanged — same reasoning as
+		# Vendor Compliance Audit's own identical method.
+		self.is_reboarding = 1 if self.signoff_type == "Reboarding" else 0
+		self.is_renewal = 1 if self.signoff_type == "Renewal" else 0
 
 	def _require_failure_reason_if_failed(self):
 		# failure_reason's own mandatory_depends_on is client-side only —
@@ -91,12 +109,33 @@ class VendorSignOff(Document):
 		return self.company or frappe.defaults.get_global_default("company")
 
 	def before_insert(self):
+		self._derive_type_flags()
+		self._require_renewal_enabled()
+		self._resolve_reboarding_kyc_and_vendor()
 		self._require_no_active_signoff_unless_failed()
 		# Not currently consumed anywhere (the Web Form that used this was
 		# removed — see git history) — kept as a stable per-document secret
 		# in case a future vendor-facing mechanism needs one again, so it
 		# doesn't have to be reintroduced from scratch.
 		self.upload_token = frappe.generate_hash(length=32)
+
+	def _require_renewal_enabled(self):
+		if not self.is_renewal:
+			return
+		if not frappe.db.get_single_value("Vendor Lifecycle Settings", "enable_signoff_renewal"):
+			frappe.throw(frappe._("Sign Off Renewal is disabled in Vendor Lifecycle Settings."))
+
+	def _resolve_reboarding_kyc_and_vendor(self):
+		# Same pattern as Vendor Reboarding Request's own field resolution
+		# — kyc/vendor stay mandatory and shown, just auto-filled from the
+		# Reboarding Request instead of picked by hand, for a re-boarding
+		# run.
+		if not self.is_reboarding or not self.reboarding_request:
+			return
+		if not self.kyc:
+			self.kyc = frappe.db.get_value("Vendor Reboarding Request", self.reboarding_request, "original_kyc")
+		if not self.vendor:
+			self.vendor = frappe.db.get_value("Vendor Reboarding Request", self.reboarding_request, "vendor")
 
 	def _require_no_active_signoff_unless_failed(self):
 		# Sign-off's own version of require_no_active_document_for_kyc() —
@@ -108,11 +147,46 @@ class VendorSignOff(Document):
 		# still blocks a second one exactly like before — only
 		# Submitted-and-Failed is the allowed exception, and the new
 		# record links back to the one it's retrying.
-		if not self.kyc:
+		#
+		# A Renewal-flagged Sign Off has no kyc/reboarding_request anchor
+		# at all — it stands alone, scoped only by vendor — and the rule is
+		# deliberately looser than the onboarding/re-boarding case: any
+		# number of PAST submitted Renewals is normal (that's the whole
+		# point, a renewal history), only a second one still in DRAFT for
+		# the same vendor is blocked. A Failed Renewal is NOT specially
+		# retryable-in-place the way an onboarding/re-boarding Sign Off
+		# is — there's no fixed "the" Renewal to retry; just create a new
+		# one once the failed draft's own value is settled (submitted).
+		if self.is_renewal:
+			if not self.vendor:
+				return
+			if frappe.db.exists(
+				"Vendor Sign Off",
+				{"vendor": self.vendor, "is_renewal": 1, "docstatus": 0, "name": ["!=", self.name or ""]},
+			):
+				frappe.throw(
+					frappe._(
+						"A draft Renewal Sign Off already exists for this vendor — submit or cancel it before"
+						" creating another."
+					)
+				)
 			return
+
+		# A re-boarding-flagged Sign Off is scoped to its own
+		# reboarding_request instead of kyc — the vendor's original,
+		# already-submitted onboarding-time Sign Off for the same kyc must
+		# not block a fresh re-boarding Sign Off.
+		if self.is_reboarding:
+			if not self.reboarding_request:
+				return
+			scope_field, scope_value = "reboarding_request", self.reboarding_request
+		else:
+			if not self.kyc:
+				return
+			scope_field, scope_value = "kyc", self.kyc
 		existing = frappe.db.get_value(
 			"Vendor Sign Off",
-			{"kyc": self.kyc, "docstatus": ["in", [0, 1]]},
+			{scope_field: scope_value, "docstatus": ["in", [0, 1]]},
 			["name", "docstatus", "sign_off_failed"],
 			as_dict=True,
 		)
@@ -136,9 +210,20 @@ class VendorSignOff(Document):
 			# mandatory when this is checked is enforced natively by the
 			# field's own mandatory_depends_on.
 			return
-		self._enforce_mandatory_stages()
+		# A Renewal isn't part of the onboarding/re-boarding stage
+		# sequence at all (see enforce_sequential_creation's own
+		# is_renewal branch) — there's nothing for it to check here.
+		if not self.is_renewal:
+			self._enforce_mandatory_stages()
 		self._require_signed_contract()
 		self._require_signed_code_of_conduct()
+		self._require_contract_validity_if_needed()
+
+	def _require_contract_validity_if_needed(self):
+		if not frappe.db.get_single_value("Vendor Lifecycle Settings", "require_contract_validity"):
+			return
+		if not self.contract_validity:
+			frappe.throw(frappe._("Contract Validity is mandatory before submitting."), frappe.MandatoryError)
 
 	def _enforce_mandatory_stages(self):
 		# Independent of enforce_sequential_creation() (which only checks
@@ -147,27 +232,53 @@ class VendorSignOff(Document):
 		# stage Settings actually requires has genuinely succeeded, even
 		# when "Enforce Sequential Stages" is off. Uses the same
 		# stage_requirement_satisfied() stage_sequencing.py uses for
-		# _nearest_requirement, so a submitted-but-Failed/Rejected stage
+		# nearest_requirement, so a submitted-but-Failed/Rejected stage
 		# only counts as satisfied if it was explicitly Force Overridden —
 		# never drifts from that rule.
 		settings = frappe.get_single("Vendor Lifecycle Settings")
 		missing = []
-
-		if settings.audit_mandatory and not stage_requirement_satisfied(
-			"Vendor Compliance Audit", {"kyc": self.kyc, "docstatus": 1, "outcome": "Passed"}
-		):
-			missing.append(frappe._("a passed Compliance Audit"))
-
 		business_type = frappe.db.get_value("Vendor KYC", self.kyc, "business_type")
-		if is_sampling_mandatory(business_type, settings) and not stage_requirement_satisfied(
-			"Vendor Sampling Evaluation", {"kyc": self.kyc, "docstatus": 1, "evaluation_outcome": "Approved"}
-		):
-			missing.append(frappe._("an approved Sampling Evaluation"))
 
-		if settings.background_check_mandatory and not stage_requirement_satisfied(
-			"Vendor Background Check", {"kyc": self.kyc, "docstatus": 1, "overall_status": "Passed"}
-		):
-			missing.append(frappe._("a passed Background Check"))
+		if self.is_reboarding:
+			# Background Check Mandatory / Compliance Audit Mandatory stay
+			# independent re-boarding-only settings. Sampling is gated by
+			# its own separate Re-Sampling Mandatory checkbox first — only
+			# once that's on does it fall through to the exact same
+			# Business Type table onboarding uses (is_sampling_mandatory_
+			# for_reboarding), rather than a separate re-boarding-only
+			# table. Still scoped by reboarding_request, so only a *fresh*
+			# re-boarding-flagged result ever counts, never an old
+			# onboarding-time one.
+			scope = {"reboarding_request": self.reboarding_request, "docstatus": 1}
+			if settings.reboarding_audit_mandatory and not stage_requirement_satisfied(
+				"Vendor Compliance Audit", {**scope, "outcome": "Passed"}
+			):
+				missing.append(frappe._("a passed Compliance Audit"))
+
+			if is_sampling_mandatory_for_reboarding(business_type, settings) and not stage_requirement_satisfied(
+				"Vendor Sampling Evaluation", {**scope, "evaluation_outcome": "Approved"}
+			):
+				missing.append(frappe._("an approved Sampling Evaluation"))
+
+			if settings.reboarding_background_check_mandatory and not stage_requirement_satisfied(
+				"Vendor Background Check", {**scope, "overall_status": "Passed"}
+			):
+				missing.append(frappe._("a passed Background Check"))
+		else:
+			if settings.audit_mandatory and not stage_requirement_satisfied(
+				"Vendor Compliance Audit", {"kyc": self.kyc, "docstatus": 1, "outcome": "Passed"}
+			):
+				missing.append(frappe._("a passed Compliance Audit"))
+
+			if is_sampling_mandatory(business_type, settings) and not stage_requirement_satisfied(
+				"Vendor Sampling Evaluation", {"kyc": self.kyc, "docstatus": 1, "evaluation_outcome": "Approved"}
+			):
+				missing.append(frappe._("an approved Sampling Evaluation"))
+
+			if settings.background_check_mandatory and not stage_requirement_satisfied(
+				"Vendor Background Check", {"kyc": self.kyc, "docstatus": 1, "overall_status": "Passed"}
+			):
+				missing.append(frappe._("a passed Background Check"))
 
 		if missing:
 			frappe.throw(frappe._("Sign-off is blocked until this vendor has: {0}.").format(", ".join(missing)))
@@ -200,9 +311,11 @@ class VendorSignOff(Document):
 		structural_error = None
 		if not self.sign_off_failed:
 			try:
-				self._enforce_mandatory_stages()
+				if not self.is_renewal:
+					self._enforce_mandatory_stages()
 				self._require_signed_contract()
 				self._require_signed_code_of_conduct()
+				self._require_contract_validity_if_needed()
 			except frappe.ValidationError as e:
 				structural_error = str(e)
 				frappe.clear_last_message()
@@ -414,9 +527,20 @@ class VendorSignOff(Document):
 		# the sending company's) is exactly the same kind of variable and
 		# easy to miss unless deliberately kept in this one place.
 		company = self._resolve_company()
-		kyc_details = (
-			frappe.db.get_value("Vendor KYC", self.kyc, ["firm_name", "gstin_uin", "pan_card"], as_dict=True) or {}
+		# A Renewal has no kyc of its own (see _resolve_reboarding_kyc_and_
+		# vendor's onboarding/re-boarding-only scope) — its own original
+		# KYC still holds the same firm/contact details, purely as a
+		# read-only contact-info source here, nothing else.
+		kyc_for_contact = self.kyc or (
+			frappe.db.get_value("Vendor KYC", {"supplier": self.vendor, "docstatus": 1}, "name")
+			if self.is_renewal and self.vendor
+			else None
 		)
+		kyc_details = (
+			frappe.db.get_value("Vendor KYC", kyc_for_contact, ["firm_name", "gstin_uin", "pan_card"], as_dict=True)
+			if kyc_for_contact
+			else {}
+		) or {}
 		company_details = (
 			frappe.db.get_value("Company", company, ["gstin", "pan"], as_dict=True) if company else {}
 		) or {}
@@ -513,7 +637,9 @@ class VendorSignOff(Document):
 	def on_submit(self):
 		# The signed-contract/code-of-conduct checks already ran in
 		# before_submit() — no need to repeat them here.
-		if self.sign_off_failed:
+		if self.is_renewal:
+			self._handle_renewal_result()
+		elif self.sign_off_failed:
 			self._handle_failed_result()
 		else:
 			self._handle_passed_result()
@@ -521,11 +647,54 @@ class VendorSignOff(Document):
 		self._send_outcome_email()
 
 	def _handle_passed_result(self):
-		if self.vendor:
-			frappe.db.set_value("Supplier", self.vendor, {
-				"vendor_lifecycle_status": VENDOR_LIFECYCLE_STATUS_ACTIVE,
-				"is_frozen": 0,
-			})
+		if not self.vendor:
+			return
+		update = {
+			"vendor_lifecycle_status": VENDOR_LIFECYCLE_STATUS_ACTIVE,
+			"vendor_lifecycle_stage": VENDOR_LIFECYCLE_STAGE_REBOARDED if self.is_reboarding else VENDOR_LIFECYCLE_STAGE_ONBOARDED,
+			"is_frozen": 0,
+		}
+		# Onboarding never needs this: disabled only ever becomes 1 there if
+		# some earlier stage failed, and that failing document's own
+		# cancellation (or a force-override) is what clears it again — a
+		# clean onboarding run never sets disabled in the first place. A
+		# re-boarding run is different: the vendor arrives already
+		# disabled=1 (that's what deboarding did, before any re-boarding
+		# stage ever ran), and force_override_stage deliberately never
+		# clears it for a re-boarding-flagged document (see its own
+		# is_reboarding branch) — so a passing re-boarding Sign Off is the
+		# one and only place left to actually re-enable the vendor.
+		if self.is_reboarding:
+			update["disabled"] = 0
+		# Recorded here too (not just for a Renewal) — a contract's
+		# validity is a real thing from the very first Sign Off, not
+		# something that only starts existing once a Renewal happens.
+		if self.contract_validity:
+			update["contract_valid_until"] = self.contract_validity
+		frappe.db.set_value("Supplier", self.vendor, update)
+
+	def _handle_renewal_result(self):
+		# A Renewal never touches vendor_lifecycle_status/stage — by
+		# explicit product decision, it's purely: keep the Supplier's own
+		# contract_valid_until in sync, and — only if the relevant
+		# Settings checkbox says so — disable the vendor on a Failed
+		# result. A Passed Renewal always clears that same disable, if it
+		# was this specific reason keeping the vendor disabled. Same shape
+		# as Vendor Compliance Audit's own _handle_renewal_result.
+		if not self.vendor:
+			return
+		settings = frappe.get_single("Vendor Lifecycle Settings")
+		if not self.sign_off_failed:
+			if self.contract_validity:
+				frappe.db.set_value("Supplier", self.vendor, "contract_valid_until", self.contract_validity)
+			if settings.get("disable_vendor_on_contract_expiry"):
+				reason = get_disable_reason_for_supplier(self.vendor)
+				if not reason or reason == {"doctype": self.doctype, "name": self.name}:
+					frappe.db.set_value("Supplier", self.vendor, "disabled", 0)
+			return
+
+		if settings.get("disable_vendor_on_contract_expiry"):
+			frappe.db.set_value("Supplier", self.vendor, "disabled", 1)
 
 	def _handle_failed_result(self):
 		# Same treatment as a Failed Compliance Audit / Background Check
@@ -533,9 +702,16 @@ class VendorSignOff(Document):
 		# vendor_lifecycle_status is deliberately left untouched, matching
 		# that same convention: it's a progress tracker, not the actual
 		# block (disabled is), and Sign-off has no "next stage" to point it
-		# at anyway.
+		# at anyway. The coarse vendor_lifecycle_stage still reflects this
+		# (Onboarding Failed / Reboarding Failed) — that field's whole
+		# point is showing the current big-picture pipeline state, and a
+		# Failed Sign-off is unambiguously part of that regardless of
+		# which pipeline it belongs to.
 		if self.vendor:
-			frappe.db.set_value("Supplier", self.vendor, "disabled", 1)
+			frappe.db.set_value("Supplier", self.vendor, {
+				"disabled": 1,
+				"vendor_lifecycle_stage": VENDOR_LIFECYCLE_STAGE_REBOARDING_FAILED if self.is_reboarding else VENDOR_LIFECYCLE_STAGE_ONBOARDING_FAILED,
+			})
 
 	def _send_outcome_email(self):
 		# Must never block the submit transaction itself — a missing
@@ -609,10 +785,73 @@ class VendorSignOff(Document):
 	def on_cancel(self):
 		block_if_onboarding_request_stopped(self)
 		enforce_sequential_cancellation(self)  # no-op today — Sign Off is the last stage
+		# Unconditional, regardless of Type — contract_valid_until is
+		# described as tracking "the most recent passed and submitted Sign
+		# Off" full stop, not "...of Renewal Type only", so cancelling ANY
+		# passed one (Onboarding, Reboarding, or Renewal) rolls the
+		# Supplier's own mirror of it back to whichever earlier Passed one
+		# (of any Type) actually holds now — same reasoning as Vendor
+		# Compliance Audit's own identical on_cancel.
+		previous_contract_valid_until = self._revert_contract_valid_until_if_cancelled_pass()
+		if self.is_renewal:
+			self._revert_renewal_result(previous_contract_valid_until)
+			return
 		if self.sign_off_failed:
 			self._revert_disable_if_this_was_the_failed_one()
 		else:
 			self._revert_vendor_status_to_last_completed_stage()
+
+	def _revert_contract_valid_until_if_cancelled_pass(self):
+		if self.sign_off_failed or not self.vendor:
+			return None
+		previous_contract_valid_until = frappe.db.get_value(
+			"Vendor Sign Off",
+			{"vendor": self.vendor, "docstatus": 1, "sign_off_failed": 0, "name": ["!=", self.name]},
+			"contract_validity",
+			order_by="creation desc",
+		)
+		frappe.db.set_value("Supplier", self.vendor, "contract_valid_until", previous_contract_valid_until)
+		return previous_contract_valid_until
+
+	def _revert_renewal_result(self, previous_contract_valid_until):
+		# Mirrors _revert_disable_if_this_was_the_failed_one below, but for
+		# a Renewal: disable/re-enable is gated entirely by the Settings
+		# checkbox (never unconditional, unlike onboarding/re-boarding).
+		# The contract_valid_until roll-back itself already happened,
+		# unconditionally, in on_cancel above — this only decides the
+		# disable consequence of whatever that roll-back landed on. Same
+		# shape as Vendor Compliance Audit's own _revert_renewal_result.
+		if not self.vendor:
+			return
+		settings = frappe.get_single("Vendor Lifecycle Settings")
+		disable_on_expiry = bool(settings.get("disable_vendor_on_contract_expiry"))
+
+		if not self.sign_off_failed:
+			if disable_on_expiry:
+				expired = (
+					not previous_contract_valid_until
+					or frappe.utils.getdate(previous_contract_valid_until) < frappe.utils.getdate(frappe.utils.today())
+				)
+				if expired:
+					frappe.db.set_value("Supplier", self.vendor, "disabled", 1)
+			return
+
+		if disable_on_expiry:
+			reason = get_disable_reason_for_supplier(self.vendor)
+			if reason and reason != {"doctype": self.doctype, "name": self.name}:
+				return
+			# A Failed Renewal Sign Off never sets contract_valid_until
+			# (only a Passed one does — see above), so
+			# previous_contract_valid_until is always None here; the
+			# Supplier's own current contract_valid_until is the only real
+			# record of whether the contract is actually still expired.
+			current_contract_valid_until = frappe.db.get_value("Supplier", self.vendor, "contract_valid_until")
+			expired = (
+				not current_contract_valid_until
+				or frappe.utils.getdate(current_contract_valid_until) < frappe.utils.getdate(frappe.utils.today())
+			)
+			if not expired:
+				frappe.db.set_value("Supplier", self.vendor, "disabled", 0)
 
 	def _revert_disable_if_this_was_the_failed_one(self):
 		# Broader than Vendor Compliance Audit / Sampling Evaluation's own
@@ -625,34 +864,93 @@ class VendorSignOff(Document):
 		# Supplier.
 		if not self.vendor:
 			return
+		if self.is_reboarding:
+			# A re-boarding vendor arrives already disabled=1 (that's what
+			# deboarding did, before any re-boarding stage ever ran) and
+			# stays disabled=1 for the whole re-boarding run regardless of
+			# which stage failed — see _handle_passed_result's own comment.
+			# Cancelling a failed re-boarding Sign Off must not touch
+			# disabled at all. get_disable_reason_for_supplier() can't be
+			# used to decide that here either — it deliberately excludes
+			# is_reboarding records by design (see its own docstring), so it
+			# would always report "nothing else is disabling it" and wrongly
+			# re-enable the vendor mid-re-boarding.
+			#
+			# vendor_lifecycle_status is also reset here to the literal
+			# "Disabled" — unlike onboarding (where this status is
+			# deliberately left untouched, see _handle_failed_result's own
+			# comment; Sign-off has no "next stage" to point it back at
+			# there), a re-boarding vendor's status must read exactly
+			# "Disabled" for _require_vendor_currently_disabled() to ever
+			# allow a fresh Vendor Reboarding Request against it again —
+			# same reasoning already applied to the "cancel a *passed*
+			# re-boarding Sign Off" path in
+			# _revert_vendor_status_to_last_completed_stage below. Left as
+			# "Sign Off In Progress" (set by validate()'s own
+			# mark_vendor_status_in_progress call) it would otherwise get
+			# silently and permanently stuck there.
+			if not get_failed_stage_reason(reboarding_request=self.reboarding_request):
+				frappe.db.set_value("Supplier", self.vendor, {
+					"vendor_lifecycle_stage": VENDOR_LIFECYCLE_STAGE_REBOARDING,
+					"vendor_lifecycle_status": VENDOR_LIFECYCLE_STATUS_DISABLED,
+				})
+			return
 		reason = get_disable_reason_for_supplier(self.vendor)
 		if not reason or reason == {"doctype": self.doctype, "name": self.name}:
 			frappe.db.set_value("Supplier", self.vendor, "disabled", 0)
+		if not get_failed_stage_reason(kyc=self.kyc):
+			frappe.db.set_value("Supplier", self.vendor, "vendor_lifecycle_stage", VENDOR_LIFECYCLE_STAGE_ONBOARDING)
 
 	def _revert_vendor_status_to_last_completed_stage(self):
-		# Undoes on_submit()'s two side effects — re-freezes the Supplier
-		# (matches its state at creation, see vendor_creation.py) and
-		# rolls vendor_lifecycle_status back to whichever stage actually
-		# succeeded most recently, walking backward the same way
-		# _nearest_requirement() does, except this always checks every
-		# stage regardless of Settings' mandatory/skip flags — a stage
-		# that happened (even an optional one) still reflects real
-		# progress that shouldn't be erased just because Sign Off is gone.
+		# Undoes on_submit()'s side effects — rolls vendor_lifecycle_status
+		# back to whichever stage actually succeeded most recently
+		# (resolve_current_stage_status walks backward the same way
+		# nearest_requirement() does, except it always checks every stage
+		# regardless of Settings' mandatory/skip flags — a stage that
+		# happened, even an optional one, still reflects real progress
+		# that shouldn't be erased just because Sign Off is gone), and
+		# rolls the coarse vendor_lifecycle_stage back down from Onboarded/
+		# Reboarded to Onboarding/Reboarding.
 		if not self.vendor:
 			return
 
-		if frappe.db.exists(
-			"Vendor Sampling Evaluation", {"kyc": self.kyc, "docstatus": 1, "evaluation_outcome": "Approved"}
-		):
-			status = VENDOR_LIFECYCLE_STATUS_SAMPLING_APPROVED
-		elif frappe.db.exists("Vendor Compliance Audit", {"kyc": self.kyc, "docstatus": 1, "outcome": "Passed"}):
-			status = VENDOR_LIFECYCLE_STATUS_AUDIT_VERIFIED
-		elif frappe.db.exists("Vendor Background Check", {"kyc": self.kyc, "docstatus": 1, "overall_status": "Passed"}):
-			status = VENDOR_LIFECYCLE_STATUS_BACKGROUND_VERIFIED
+		update = {
+			"vendor_lifecycle_stage": VENDOR_LIFECYCLE_STAGE_REBOARDING if self.is_reboarding else VENDOR_LIFECYCLE_STAGE_ONBOARDING,
+		}
+		if self.is_reboarding:
+			# The re-boarding Sign Off passing was the ONLY thing that had
+			# re-enabled this vendor (see _handle_passed_result) — nothing
+			# else in a re-boarding run ever touches disabled at all (by
+			# design — see each of the 3 pre-Sign-off doctypes' own
+			# _handle_failed_result/_handle_rejected_result). Cancelling
+			# the Sign Off that granted that must retract it: the vendor
+			# goes back to disabled, since re-boarding is no longer
+			# actually complete. Unlike the "was I the only reason"
+			# get_disable_reason_for_supplier check used elsewhere, this
+			# is unconditional — a re-boarding request can only ever have
+			# one submitted, non-Failed Sign Off at a time (see
+			# _require_no_active_signoff_unless_failed), so there's never
+			# another one to defer to.
+			#
+			# vendor_lifecycle_status goes all the way back to Disabled
+			# here too — deliberately NOT resolve_current_stage_status's
+			# "most advanced still-passed re-boarding stage" (unlike the
+			# onboarding branch below). "Disabled" is the one value
+			# Vendor Reboarding Request's own _require_vendor_currently_
+			# disabled() checks for to allow a fresh re-boarding attempt —
+			# leaving some other re-boarding-stage label here while
+			# disabled=1 would make the vendor permanently ineligible for
+			# a new Vendor Reboarding Request, even though it genuinely is
+			# disabled again.
+			update["disabled"] = 1
+			update["vendor_lifecycle_status"] = VENDOR_LIFECYCLE_STATUS_DISABLED
 		else:
-			status = VENDOR_LIFECYCLE_STATUS_KYC_VERIFIED
-
-		frappe.db.set_value("Supplier", self.vendor, {
-			"vendor_lifecycle_status": status,
-			"is_frozen": 1,
-		})
+			update["vendor_lifecycle_status"] = resolve_current_stage_status(kyc=self.kyc)
+			# Re-freezes the Supplier back to its state before this Sign
+			# Off passed (matches Supplier creation — see
+			# vendor_creation.py). Skipped for re-boarding: nothing
+			# re-boarding-flagged ever freezes the Supplier in the first
+			# place (only the original onboarding Sign Off does that, once,
+			# at Supplier creation), so there's nothing to restore here.
+			update["is_frozen"] = 1
+		frappe.db.set_value("Supplier", self.vendor, update)

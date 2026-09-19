@@ -17,6 +17,7 @@
   "open_transactions_summary",
   "section_break_ratings",
   "ratings",
+  "connections_tab",
   "amended_from"
  ],
  "fields": [
@@ -96,6 +97,12 @@
    "options": "Vendor Deboarding Rating"
   },
   {
+   "fieldname": "connections_tab",
+   "fieldtype": "Tab Break",
+   "label": "Connections",
+   "show_dashboard": 1
+  },
+  {
    "fieldname": "amended_from",
    "fieldtype": "Link",
    "label": "Amended From",
@@ -106,8 +113,14 @@
   }
  ],
  "is_submittable": 1,
- "links": [],
- "modified": "2026-09-05 08:00:00.000000",
+ "links": [
+  {
+   "group": "Vendor Lifecycle",
+   "link_doctype": "Vendor Deboarding Checklist",
+   "link_fieldname": "deboarding_request"
+  }
+ ],
+ "modified": "2026-09-21 17:00:00.000000",
  "modified_by": "Administrator",
  "module": "Vendor Lifecycle",
  "name": "Vendor Deboarding Request",

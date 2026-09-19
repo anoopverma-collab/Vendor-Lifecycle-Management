@@ -5,7 +5,6 @@
  "doctype": "Workspace Sidebar",
  "header_icon": "handshake",
  "idx": 0,
- "module_onboarding": "Vendor Lifecycle Onboarding",
  "items": [
   {
    "child": 0,
@@ -51,6 +50,18 @@
    "keep_closed": 0,
    "label": "Vendor Deboarding Request",
    "link_to": "Vendor Deboarding Request",
+   "link_type": "DocType",
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 1,
+   "icon": "user-check",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Vendor Reboarding Request",
+   "link_to": "Vendor Reboarding Request",
    "link_type": "DocType",
    "show_arrow": 0,
    "type": "Link"
@@ -296,6 +307,18 @@
    "icon": "",
    "indent": 0,
    "keep_closed": 0,
+   "label": "Vendor Reboarding Pipeline",
+   "link_to": "Vendor Reboarding Pipeline",
+   "link_type": "Report",
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 1,
+   "collapsible": 1,
+   "icon": "",
+   "indent": 0,
+   "keep_closed": 0,
    "label": "Vendor Deboarding Pipeline",
    "link_to": "Vendor Deboarding Pipeline",
    "link_type": "Report",
@@ -374,6 +397,18 @@
    "type": "Link"
   },
   {
+   "child": 1,
+   "collapsible": 1,
+   "icon": "",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Vendor Reboarding",
+   "link_to": "Vendor Reboarding",
+   "link_type": "Dashboard",
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
    "child": 0,
    "collapsible": 1,
    "icon": "settings",
@@ -386,9 +421,10 @@
    "type": "Link"
   }
  ],
- "modified": "2026-09-09 17:30:00.000000",
+ "modified": "2026-09-20 02:27:47.693715",
  "modified_by": "Administrator",
  "module": "Vendor Lifecycle",
+ "module_onboarding": "Vendor Lifecycle Onboarding",
  "name": "Vendor Lifecycle",
  "owner": "Administrator",
  "standard": 1,

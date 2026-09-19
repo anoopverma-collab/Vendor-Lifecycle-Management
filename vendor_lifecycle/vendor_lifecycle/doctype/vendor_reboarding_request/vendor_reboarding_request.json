@@ -1,0 +1,340 @@
+{
+ "actions": [],
+ "autoname": "VRR-.YYYY.-.#####",
+ "creation": "2026-09-17 10:00:00.000000",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "field_order": [
+  "vendor",
+  "original_kyc",
+  "original_deboarding_request",
+  "request_date",
+  "column_break_top",
+  "business_type",
+  "supplier_group",
+  "reason_for_reboarding",
+  "supporting_attachment",
+  "priority",
+  "status",
+  "section_break_deboarding_context",
+  "deboarding_reason",
+  "is_resolvable",
+  "originally_onboarded_on",
+  "column_break_deboarding_context",
+  "deboarded_on",
+  "days_since_deboarded",
+  "prior_deboarding_count",
+  "section_break_financial_summary",
+  "financial_summary",
+  "section_break_reference",
+  "contact_person_name",
+  "contact_person_number",
+  "official_email",
+  "address_line_1",
+  "city",
+  "column_break_reference",
+  "state",
+  "pincode",
+  "country",
+  "billing_currency",
+  "connections_tab",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "vendor",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Vendor",
+   "options": "Supplier",
+   "reqd": 1
+  },
+  {
+   "description": "Most recent submitted KYC for this vendor.",
+   "fieldname": "original_kyc",
+   "fieldtype": "Link",
+   "label": "Original Vendor KYC",
+   "options": "Vendor KYC",
+   "read_only": 1
+  },
+  {
+   "description": "The request that led to this vendor being deboarded.",
+   "fieldname": "original_deboarding_request",
+   "fieldtype": "Link",
+   "label": "Original Deboarding Request",
+   "options": "Vendor Deboarding Request",
+   "read_only": 1
+  },
+  {
+   "default": "Today",
+   "fieldname": "request_date",
+   "fieldtype": "Date",
+   "label": "Request Date",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_top",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "business_type",
+   "fieldtype": "Data",
+   "label": "Business Type",
+   "read_only": 1
+  },
+  {
+   "fieldname": "supplier_group",
+   "fieldtype": "Data",
+   "label": "Supplier Group",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reason_for_reboarding",
+   "fieldtype": "Small Text",
+   "label": "Reason for Re-boarding",
+   "reqd": 1
+  },
+  {
+   "description": "Optional — attach a written request/email from the vendor asking to be reconsidered, or any other document supporting this re-boarding request.",
+   "fieldname": "supporting_attachment",
+   "fieldtype": "Attach",
+   "label": "Supporting Attachment"
+  },
+  {
+   "fieldname": "priority",
+   "fieldtype": "Select",
+   "label": "Priority",
+   "options": "\nLow\nMedium\nHigh"
+  },
+  {
+   "default": "In Progress",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "In Progress\nApproval Pending\nApproved\nRejected\nCancelled\nTrashed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_deboarding_context",
+   "fieldtype": "Section Break",
+   "label": "Why This Vendor Was Deboarded"
+  },
+  {
+   "description": "From the Original Deboarding Request.",
+   "fieldname": "deboarding_reason",
+   "fieldtype": "Small Text",
+   "label": "Deboarding Reason",
+   "read_only": 1
+  },
+  {
+   "description": "Deboarding team's verdict at the time — informational only.",
+   "fieldname": "is_resolvable",
+   "fieldtype": "Select",
+   "label": "Was the Issue Resolvable?",
+   "options": "\nYes\nNo\nMaybe",
+   "read_only": 1
+  },
+  {
+   "description": "When the original KYC was created.",
+   "fieldname": "originally_onboarded_on",
+   "fieldtype": "Date",
+   "label": "Originally Onboarded On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_deboarding_context",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "When the Deboarding Checklist was completed.",
+   "fieldname": "deboarded_on",
+   "fieldtype": "Date",
+   "label": "Deboarded On",
+   "read_only": 1
+  },
+  {
+   "description": "As of this Request's creation — not live.",
+   "fieldname": "days_since_deboarded",
+   "fieldtype": "Int",
+   "label": "Days Since Deboarded",
+   "read_only": 1
+  },
+  {
+   "description": "Total times deboarded, including this time.",
+   "fieldname": "prior_deboarding_count",
+   "fieldtype": "Int",
+   "label": "Number of Deboardings",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_financial_summary",
+   "fieldtype": "Section Break",
+   "label": "Financial Summary (Lifetime, with this Vendor)"
+  },
+  {
+   "fieldname": "financial_summary",
+   "fieldtype": "HTML",
+   "label": "Financial Summary"
+  },
+  {
+   "fieldname": "section_break_reference",
+   "fieldtype": "Section Break",
+   "label": "Address and Contact"
+  },
+  {
+   "fieldname": "contact_person_name",
+   "fieldtype": "Data",
+   "label": "Contact Person Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "contact_person_number",
+   "fieldtype": "Phone",
+   "label": "Contact Person Number",
+   "read_only": 1
+  },
+  {
+   "fieldname": "official_email",
+   "fieldtype": "Data",
+   "label": "Official Email",
+   "read_only": 1
+  },
+  {
+   "fieldname": "address_line_1",
+   "fieldtype": "Data",
+   "label": "Address Line 1",
+   "read_only": 1
+  },
+  {
+   "fieldname": "city",
+   "fieldtype": "Data",
+   "label": "City",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_reference",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "state",
+   "fieldtype": "Data",
+   "label": "State",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pincode",
+   "fieldtype": "Data",
+   "label": "Postal / ZIP Code",
+   "read_only": 1
+  },
+  {
+   "fieldname": "country",
+   "fieldtype": "Link",
+   "ignore_user_permissions": 1,
+   "label": "Country",
+   "options": "Country",
+   "read_only": 1
+  },
+  {
+   "fieldname": "billing_currency",
+   "fieldtype": "Link",
+   "ignore_user_permissions": 1,
+   "label": "Billing Currency",
+   "options": "Currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "connections_tab",
+   "fieldtype": "Tab Break",
+   "label": "Connections",
+   "show_dashboard": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Vendor Reboarding Request",
+   "print_hide": 1,
+   "read_only": 1
+  }
+ ],
+ "is_submittable": 1,
+ "links": [
+  {
+   "group": "Vendor Lifecycle",
+   "link_doctype": "Vendor Background Check",
+   "link_fieldname": "reboarding_request"
+  },
+  {
+   "group": "Vendor Lifecycle",
+   "link_doctype": "Vendor Compliance Audit",
+   "link_fieldname": "reboarding_request"
+  },
+  {
+   "group": "Vendor Lifecycle",
+   "link_doctype": "Vendor Sampling Evaluation",
+   "link_fieldname": "reboarding_request"
+  },
+  {
+   "group": "Vendor Lifecycle",
+   "link_doctype": "Vendor Sign Off",
+   "link_fieldname": "reboarding_request"
+  }
+ ],
+ "modified": "2026-09-21 16:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "Vendor Reboarding Request",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Vendor Lifecycle Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Vendor Lifecycle User",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

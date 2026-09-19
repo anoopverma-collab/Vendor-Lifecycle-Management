@@ -4,7 +4,11 @@
 import frappe
 from frappe.model.document import Document
 
-from vendor_lifecycle.vendor_lifecycle.stage_sequencing import STAGE_SEQUENCE
+from vendor_lifecycle.vendor_lifecycle.stage_sequencing import (
+	STAGE_OUTCOME_CONFIG,
+	STAGE_SEQUENCE,
+	stage_progress_status,
+)
 from vendor_lifecycle.vendor_lifecycle.state_validation import (
 	require_state_for_india,
 	validate_indian_state_spelling,
@@ -52,18 +56,6 @@ REFERRAL_SPECIFIC_MANDATORY_FIELDS = {
 	"Referral from Existing Vendor": ["existing_vendor_name"],
 }
 
-# Drives get_pipeline_progress()'s per-stage status for the 4 doctypes after
-# KYC — (doctype, display label, field holding the pass/fail decision, the
-# value that field takes when Passed, the force-override field or None).
-# Sign Off has no force field: it's not in FORCE_OVERRIDABLE_DOCTYPES
-# (stage_sequencing.py) — a Failed Sign-off is a terminal decision about the
-# vendor overall, not a mid-pipeline gate a manager can force past.
-STAGE_OUTCOME_CONFIG = (
-	("Vendor Background Check", "Background Check", "overall_status", "Passed", "force_overridden"),
-	("Vendor Compliance Audit", "Compliance Audit", "outcome", "Passed", "force_overridden"),
-	("Vendor Sampling Evaluation", "Sampling Evaluation", "evaluation_outcome", "Approved", "force_overridden"),
-	("Vendor Sign Off", "Sign Off", "sign_off_failed", 0, None),
-)
 
 
 class VendorOnboardingRequest(Document):
@@ -390,39 +382,7 @@ class VendorOnboardingRequest(Document):
 		return "Not Started"
 
 	def _stage_status(self, doctype, filters, outcome_field, passed_value, force_field):
-		"""A submitted stage document is "Completed" only if it genuinely
-		passed — force_overridden is checked first, since force_override_stage()
-		(stage_sequencing.py) never touches the underlying outcome field, so a
-		forcefully-passed record still literally reads Failed/Rejected
-		underneath forever; that's shown as its own distinct "Forcefully
-		Passed" state rather than folded into either Completed or Failed.
-		Sign Off has no force_field (it's not force-overridable — see
-		FORCE_OVERRIDABLE_DOCTYPES in stage_sequencing.py), so it only ever
-		resolves to Completed or Failed.
-
-		docstatus 2 (cancelled) is excluded from the lookup entirely — a
-		cancelled record with no fresh replacement isn't "in progress" or
-		any prior outcome, it's simply as if nothing exists yet. Only one
-		non-cancelled record can exist per KYC at a time (see
-		require_no_active_document_for_kyc), so this is never ambiguous
-		about which record to look at."""
-		rows = frappe.get_all(
-			doctype,
-			filters={**filters, "docstatus": ["!=", 2]},
-			fields=["docstatus", outcome_field] + ([force_field] if force_field else []),
-			limit=1,
-		)
-		if not rows:
-			return "Not Started"
-
-		row = rows[0]
-		if row.docstatus == 0:
-			return "In Progress"
-
-		# docstatus == 1 from here — Needs Review/Not Reviewed shouldn't be
-		# reachable at submit time (every one of these 4 doctypes blocks its
-		# own submit while its outcome is still unresolved), so this is a
-		# genuine Passed/Failed decision, not a partial one.
-		if force_field and row.get(force_field):
-			return "Forcefully Passed"
-		return "Completed" if row.get(outcome_field) == passed_value else "Failed"
+		# Thin wrapper — the actual logic is stage_sequencing.
+		# stage_progress_status, shared with Vendor Reboarding Request's own
+		# identical pipeline-progress widget.
+		return stage_progress_status(doctype, filters, outcome_field, passed_value, force_field)

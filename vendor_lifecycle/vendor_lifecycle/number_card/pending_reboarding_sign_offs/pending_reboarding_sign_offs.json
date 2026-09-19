@@ -1,0 +1,22 @@
+{
+ "color": "#2c5cc5",
+ "creation": "2026-09-19 21:00:00.000000",
+ "docstatus": 0,
+ "doctype": "Number Card",
+ "document_type": "Vendor Sign Off",
+ "dynamic_filters_json": "[]",
+ "filters_json": "[[\"Vendor Sign Off\",\"docstatus\",\"=\",0],[\"Vendor Sign Off\",\"is_reboarding\",\"=\",1]]",
+ "function": "Count",
+ "idx": 0,
+ "is_public": 1,
+ "is_standard": 1,
+ "label": "Pending Reboarding Sign Offs",
+ "modified": "2026-09-19 21:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "Pending Reboarding Sign Offs",
+ "owner": "Administrator",
+ "show_percentage_stats": 1,
+ "stats_time_interval": "Monthly",
+ "type": "Document Type"
+}

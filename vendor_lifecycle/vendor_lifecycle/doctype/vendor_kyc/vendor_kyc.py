@@ -5,6 +5,7 @@ import re
 
 import frappe
 from frappe.model.document import Document
+from frappe.model.workflow import get_workflow_name
 
 from vendor_lifecycle.vendor_lifecycle.stage_sequencing import (
 	block_if_onboarding_request_stopped,
@@ -115,7 +116,18 @@ class VendorKYC(Document):
 		Deliberately a plain save, not a submit — the document stays at
 		docstatus 0 forever; _enforce_rejected_is_frozen() above is what
 		actually locks it once status is Rejected, and before_submit() below
-		refuses to let a rejected KYC be submitted."""
+		refuses to let a rejected KYC be submitted.
+
+		A silent no-op whenever a Workflow IS active — the client-side
+		button is already hidden then (the Workflow's own Reject action is
+		the real one to use instead), so nobody ever reaches this via a
+		click; this is only a server-side backstop for some other caller
+		(API, script) reaching it anyway. Without this, saving status =
+		"Rejected" here would immediately get silently overwritten back to
+		the stale workflow_state value by _sync_status_from_workflow_state()
+		in the same save — worse than just doing nothing."""
+		if get_workflow_name(self.doctype):
+			return
 		if self.docstatus != 0:
 			frappe.throw(frappe._("Only a Vendor KYC that hasn't been submitted yet can be rejected."))
 		if self.status == "Rejected":

@@ -6,8 +6,12 @@
  "document_type": "Document",
  "engine": "InnoDB",
  "field_order": [
+  "audit_type",
   "kyc",
   "vendor",
+  "is_reboarding",
+  "is_renewal",
+  "reboarding_request",
   "onboarding_request",
   "column_break_top",
   "audit_date",
@@ -48,13 +52,23 @@
  ],
  "fields": [
   {
+   "fieldname": "audit_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Type",
+   "options": "\nOnboarding\nReboarding\nRenewal",
+   "read_only_depends_on": "eval:doc.kyc || doc.reboarding_request",
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.audit_type==\"Onboarding\"",
    "fieldname": "kyc",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Vendor KYC",
+   "mandatory_depends_on": "eval:doc.audit_type==\"Onboarding\"",
    "options": "Vendor KYC",
-   "read_only": 1,
-   "reqd": 1
+   "read_only": 1
   },
   {
    "fieldname": "vendor",
@@ -62,10 +76,36 @@
    "in_list_view": 1,
    "label": "Vendor",
    "options": "Supplier",
-   "read_only": 1,
+   "read_only_depends_on": "eval:doc.audit_type!=\"Renewal\"",
    "reqd": 1
   },
   {
+   "default": "0",
+   "fieldname": "is_reboarding",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Is Re-boarding",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_renewal",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Is Renewal",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.audit_type==\"Reboarding\"",
+   "fieldname": "reboarding_request",
+   "fieldtype": "Link",
+   "label": "Vendor Reboarding Request",
+   "mandatory_depends_on": "eval:doc.audit_type==\"Reboarding\"",
+   "options": "Vendor Reboarding Request",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.audit_type==\"Onboarding\"",
    "fieldname": "onboarding_request",
    "fieldtype": "Link",
    "label": "Vendor Onboarding Request",
@@ -309,7 +349,7 @@
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2026-09-02 16:00:00.000000",
+ "modified": "2026-09-21 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Vendor Lifecycle",
  "name": "Vendor Compliance Audit",

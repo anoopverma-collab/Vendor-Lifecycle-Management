@@ -23,28 +23,19 @@ frappe.ui.form.on("Vendor Background Check", {
 		// permanent historical record.
 		frm.ignore_doctypes_on_cancel_all = ["Vendor Background Check Reference"];
 
-		// "Create Background Check" (from Vendor KYC's "Create" dropdown,
-		// or the per-stage buttons elsewhere) opens a new document via
-		// frappe.new_doc(doctype, {kyc: ...}) — that prefill mechanism
-		// (route_options) sets the field with a raw property assignment,
-		// not frm.set_value(), so it never fires a "kyc changed" trigger
-		// and vendor (server-side auto-synced from the KYC's Supplier via
-		// sync_vendor_field, but only ever computed when the document is
-		// actually saved) is still blank the moment the form first
-		// renders. Since vendor is both mandatory and read-only, Frappe's
-		// own client-side "fill in mandatory fields" check would
-		// otherwise block the very first save attempt before the server
-		// ever gets a chance to fill it in — an unbreakable dead end, since
-		// the user has no way to type into a read-only field themselves.
-		// refresh() always fires regardless of how kyc got its value, so
-		// this fills vendor in immediately, before any save is attempted.
-		if (frm.is_new() && frm.doc.kyc && !frm.doc.vendor) {
-			frappe.db.get_value("Vendor KYC", frm.doc.kyc, "supplier").then((r) => {
-				if (r.message && r.message.supplier) {
-					frm.set_value("vendor", r.message.supplier);
-				}
-			});
-		}
+		// vendor is mandatory and read-only, resolved server-side from kyc
+		// only once this document is actually saved (sync_vendor_field) —
+		// far too late for Frappe's own client-side "fill in mandatory
+		// fields" check, which would otherwise block the very first save
+		// attempt (the user has no way to type into a read-only field
+		// themselves). Both "Create" buttons that open this doctype
+		// (Vendor KYC's own dropdown, Vendor Reboarding Request's own
+		// dropdown) now set vendor explicitly, via set_value(), once this
+		// form is confirmed to exist — no lookup needed here at all. A
+		// plain route_options value alongside kyc/reboarding_request
+		// wasn't reliable enough on its own for a mandatory field;
+		// confirmed the hard way on Vendor Compliance Audit / Vendor Sign
+		// Off / Vendor Sampling Evaluation's own identical buttons.
 
 		toggle_compliance_checks_add_row(frm);
 
@@ -73,11 +64,52 @@ frappe.ui.form.on("Vendor Background Check", {
 		}
 
 		// A convenience shortcut to the next stage, right from here, once
-		// this one has actually passed — same eligibility check Vendor
-		// KYC's own "Create" dropdown uses (one active document per
-		// stage per vendor, previous stage Passed, etc.), so this can
-		// never offer something that would actually be rejected.
-		if (frm.doc.docstatus === 1 && frm.doc.kyc) {
+		// this one has actually passed. Re-boarding doesn't go through
+		// get_available_stages() at all — that's onboarding-only,
+		// kyc-scoped sequencing (see stage_sequencing.enforce_sequential_
+		// creation's is_reboarding branch, which no-ops entirely for a
+		// re-boarding document) — so a re-boarding-flagged Background
+		// Check always offers this button once submitted, the same as
+		// Vendor Reboarding Request's own "Create" dropdown does; a
+		// duplicate attempt is still correctly refused server-side.
+		if (frm.doc.docstatus === 1 && frm.doc.is_reboarding) {
+			// Don't offer this once re-boarding is already done, or while
+			// Compliance Audit's own mandatory predecessor (which may or
+			// may not be THIS Background Check — depends on what's
+			// actually configured mandatory) hasn't passed yet — same
+			// checks Vendor Reboarding Request's own "Create" dropdown
+			// already respects, reused here via the same server method
+			// rather than re-implementing the same logic client-side.
+			frappe.call({
+				method: "vendor_lifecycle.vendor_lifecycle.doctype.vendor_reboarding_request.vendor_reboarding_request.get_reboarding_stage_info_for",
+				args: { reboarding_request: frm.doc.reboarding_request },
+			}).then((r) => {
+				const info = r.message || {};
+				if (info.reboarding_complete) return;
+				if ((info.missing_requirement || {})["Vendor Compliance Audit"]) return;
+				frm.add_custom_button(__("Compliance Audit"), () => {
+					const vendor = frm.doc.vendor;
+					// See Vendor KYC's own "Create" dropdown for why vendor
+					// is set this way, explicitly, once the new form is
+					// confirmed to exist — handing it over as a plain
+					// route_options value isn't reliable enough on its own
+					// for a mandatory field.
+					frappe.new_doc("Vendor Compliance Audit", {
+						reboarding_request: frm.doc.reboarding_request,
+						audit_type: "Reboarding",
+					}).then(() => {
+						if (cur_frm && cur_frm.doctype === "Vendor Compliance Audit" && cur_frm.is_new()) {
+							cur_frm.set_value("vendor", vendor);
+						}
+					});
+				}, __("Create"));
+				frm.page.set_inner_btn_group_as_primary(__("Create"));
+			});
+		} else if (frm.doc.docstatus === 1 && frm.doc.kyc) {
+			// Same eligibility check Vendor KYC's own "Create" dropdown
+			// uses (one active document per stage per vendor, previous
+			// stage Passed, etc.), so this can never offer something that
+			// would actually be rejected.
 			frappe.call({
 				method: "vendor_lifecycle.vendor_lifecycle.stage_sequencing.get_available_stages",
 				args: { kyc: frm.doc.kyc },
@@ -85,7 +117,15 @@ frappe.ui.form.on("Vendor Background Check", {
 				const stages = (r.message && r.message.stages) || [];
 				if (stages.includes("Vendor Compliance Audit")) {
 					frm.add_custom_button(__("Compliance Audit"), () => {
-						frappe.new_doc("Vendor Compliance Audit", { kyc: frm.doc.kyc });
+						const vendor = frm.doc.vendor;
+						frappe.new_doc("Vendor Compliance Audit", {
+							kyc: frm.doc.kyc,
+							audit_type: "Onboarding",
+						}).then(() => {
+							if (cur_frm && cur_frm.doctype === "Vendor Compliance Audit" && cur_frm.is_new()) {
+								cur_frm.set_value("vendor", vendor);
+							}
+						});
 					}, __("Create"));
 					// Same primary-blue styling as Vendor KYC's own "Create"
 					// dropdown / this form's own "Create Reference" button.

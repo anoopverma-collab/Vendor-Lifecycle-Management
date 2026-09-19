@@ -349,3 +349,308 @@ def send_signoff_followups():
 			frappe.log_error(title="Vendor Sign Off: failed to send follow-up", message=frappe.get_traceback())
 
 	return sent
+
+
+# Fixed 30/7 day-before-expiry threshold and 7/15/30 day-since-creation
+# threshold, both checked as an exact day match (the job runs daily, so
+# each threshold fires exactly once per vendor/draft in the ordinary
+# case) — same "before 30 days and 7 days" / "7 days 15 days and 30
+# days" cadence given for Compliance Audit Renewal, reused as-is for
+# Sign Off Renewal once that's built too.
+RENEWAL_DUE_SOON_DAYS = (30, 7)
+RENEWAL_DRAFT_REMINDER_DAYS = (7, 15, 30)
+
+
+def send_compliance_audit_renewal_notices():
+	"""Daily scheduler job. Entirely gated by Settings' own "Enable
+	Compliance Audit Renewal" switch — does nothing at all if that's off.
+	Three independent things, driven by each Supplier's own
+	compliance_audit_valid_until:
+	1. Already expired, with no newer Passed Compliance Audit since: if
+	   "Disable Vendor on Compliance Audit Expiry/Failure" is on, disable
+	   the vendor (same hard consequence a Failed Renewal already has —
+	   see vendor_compliance_audit.py's own _handle_renewal_result).
+	2. Within the RENEWAL_DUE_SOON_DAYS window: if "Auto-Create Compliance
+	   Audit Renewal" is on and no Renewal draft is already open for this
+	   vendor, create one.
+	3. On exactly day 30 or day 7 before expiry: email the Vendor
+	   Lifecycle Manager either way (auto-created or not)."""
+	from vendor_lifecycle.vendor_lifecycle.doctype.vendor_compliance_audit.vendor_compliance_audit import (
+		DEFAULT_COMPLIANCE_AUDIT_RENEWAL_DUE_EMAIL_TEMPLATE,
+	)
+	from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
+		resolve_vendor_lifecycle_company_name,
+		send_vendor_lifecycle_email,
+		vendor_lifecycle_manager_emails,
+	)
+
+	settings = frappe.get_single("Vendor Lifecycle Settings")
+	if not settings.get("enable_compliance_audit_renewal"):
+		return []
+
+	today = getdate(nowdate())
+	vendors = frappe.get_all(
+		"Supplier",
+		filters={"compliance_audit_valid_until": ["is", "set"]},
+		fields=["name", "supplier_name", "compliance_audit_valid_until", "disabled"],
+	)
+
+	actions = []
+	for vendor in vendors:
+		valid_until = getdate(vendor.compliance_audit_valid_until)
+		days_remaining = (valid_until - today).days
+
+		if days_remaining < 0:
+			if settings.get("disable_vendor_on_compliance_audit_expiry") and not vendor.disabled:
+				frappe.db.set_value("Supplier", vendor.name, "disabled", 1)
+				actions.append((vendor.name, "expired-disabled"))
+			continue
+
+		if days_remaining not in RENEWAL_DUE_SOON_DAYS:
+			continue
+
+		if settings.get("auto_create_compliance_audit_renewal") and not frappe.db.exists(
+			"Vendor Compliance Audit", {"vendor": vendor.name, "is_renewal": 1, "docstatus": 0}
+		):
+			try:
+				frappe.get_doc({
+					"doctype": "Vendor Compliance Audit",
+					"audit_type": "Renewal",
+					"vendor": vendor.name,
+				}).insert(ignore_permissions=True)
+				actions.append((vendor.name, "auto-created"))
+			except Exception:
+				frappe.log_error(
+					title="Compliance Audit Renewal: failed to auto-create draft", message=frappe.get_traceback()
+				)
+
+		recipients = vendor_lifecycle_manager_emails()
+		if not recipients:
+			continue
+		try:
+			send_vendor_lifecycle_email(
+				doctype="Vendor Compliance Audit",
+				name=vendor.name,
+				template_name=DEFAULT_COMPLIANCE_AUDIT_RENEWAL_DUE_EMAIL_TEMPLATE,
+				context={
+					"vendor_name": vendor.supplier_name,
+					"vendor": vendor.name,
+					"valid_until": frappe.utils.formatdate(valid_until),
+					"days_remaining": days_remaining,
+					"company_name": resolve_vendor_lifecycle_company_name(),
+				},
+				recipients=recipients,
+			)
+			actions.append((vendor.name, f"due-soon-{days_remaining}"))
+		except Exception:
+			frappe.log_error(
+				title="Compliance Audit Renewal: failed to send due-soon email", message=frappe.get_traceback()
+			)
+
+	return actions
+
+
+def send_compliance_audit_renewal_draft_reminders():
+	"""Daily scheduler job: on exactly day 7, 15, or 30 after a Renewal
+	Compliance Audit draft was created, nudge the Vendor Lifecycle
+	Manager — and the draft's own creator too, unless it was auto-created
+	by send_compliance_audit_renewal_notices() itself (owner would be
+	Administrator, since scheduled jobs run as that user; there's no
+	meaningful human "creator" to notify in that case)."""
+	from vendor_lifecycle.vendor_lifecycle.doctype.vendor_compliance_audit.vendor_compliance_audit import (
+		DEFAULT_COMPLIANCE_AUDIT_RENEWAL_DRAFT_REMINDER_EMAIL_TEMPLATE,
+	)
+	from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
+		resolve_vendor_lifecycle_company_name,
+		send_vendor_lifecycle_email,
+		vendor_lifecycle_manager_emails,
+	)
+
+	settings = frappe.get_single("Vendor Lifecycle Settings")
+	if not settings.get("enable_compliance_audit_renewal"):
+		return []
+
+	today = getdate(nowdate())
+	drafts = frappe.get_all(
+		"Vendor Compliance Audit",
+		filters={"is_renewal": 1, "docstatus": 0},
+		fields=["name", "vendor", "creation", "owner"],
+	)
+
+	reminded = []
+	for draft in drafts:
+		days_open = (today - getdate(draft.creation)).days
+		if days_open not in RENEWAL_DRAFT_REMINDER_DAYS:
+			continue
+
+		recipients = list(vendor_lifecycle_manager_emails())
+		if draft.owner != "Administrator":
+			creator_email = frappe.db.get_value("User", draft.owner, "email") or draft.owner
+			if creator_email and creator_email not in recipients:
+				recipients.append(creator_email)
+		if not recipients:
+			continue
+
+		try:
+			send_vendor_lifecycle_email(
+				doctype="Vendor Compliance Audit",
+				name=draft.name,
+				template_name=DEFAULT_COMPLIANCE_AUDIT_RENEWAL_DRAFT_REMINDER_EMAIL_TEMPLATE,
+				context={
+					"vendor_name": frappe.db.get_value("Supplier", draft.vendor, "supplier_name"),
+					"vendor": draft.vendor,
+					"draft_name": draft.name,
+					"days_open": days_open,
+					"company_name": resolve_vendor_lifecycle_company_name(),
+					"draft_link": frappe.utils.get_url_to_form("Vendor Compliance Audit", draft.name),
+				},
+				recipients=recipients,
+			)
+			reminded.append(draft.name)
+		except Exception:
+			frappe.log_error(
+				title="Compliance Audit Renewal: failed to send draft reminder", message=frappe.get_traceback()
+			)
+
+	return reminded
+
+
+def send_signoff_renewal_notices():
+	"""Daily scheduler job. Same shape as
+	send_compliance_audit_renewal_notices, for the Sign Off / contract
+	side instead — entirely gated by "Enable Sign Off Renewal"."""
+	from vendor_lifecycle.vendor_lifecycle.doctype.vendor_sign_off.vendor_sign_off import (
+		DEFAULT_SIGNOFF_RENEWAL_DUE_EMAIL_TEMPLATE,
+	)
+	from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
+		resolve_vendor_lifecycle_company_name,
+		send_vendor_lifecycle_email,
+		vendor_lifecycle_manager_emails,
+	)
+
+	settings = frappe.get_single("Vendor Lifecycle Settings")
+	if not settings.get("enable_signoff_renewal"):
+		return []
+
+	today = getdate(nowdate())
+	vendors = frappe.get_all(
+		"Supplier",
+		filters={"contract_valid_until": ["is", "set"]},
+		fields=["name", "supplier_name", "contract_valid_until", "disabled"],
+	)
+
+	actions = []
+	for vendor in vendors:
+		valid_until = getdate(vendor.contract_valid_until)
+		days_remaining = (valid_until - today).days
+
+		if days_remaining < 0:
+			if settings.get("disable_vendor_on_contract_expiry") and not vendor.disabled:
+				frappe.db.set_value("Supplier", vendor.name, "disabled", 1)
+				actions.append((vendor.name, "expired-disabled"))
+			continue
+
+		if days_remaining not in RENEWAL_DUE_SOON_DAYS:
+			continue
+
+		if settings.get("auto_create_signoff_renewal") and not frappe.db.exists(
+			"Vendor Sign Off", {"vendor": vendor.name, "is_renewal": 1, "docstatus": 0}
+		):
+			try:
+				frappe.get_doc({
+					"doctype": "Vendor Sign Off",
+					"signoff_type": "Renewal",
+					"vendor": vendor.name,
+				}).insert(ignore_permissions=True)
+				actions.append((vendor.name, "auto-created"))
+			except Exception:
+				frappe.log_error(
+					title="Sign Off Renewal: failed to auto-create draft", message=frappe.get_traceback()
+				)
+
+		recipients = vendor_lifecycle_manager_emails()
+		if not recipients:
+			continue
+		try:
+			send_vendor_lifecycle_email(
+				doctype="Vendor Sign Off",
+				name=vendor.name,
+				template_name=DEFAULT_SIGNOFF_RENEWAL_DUE_EMAIL_TEMPLATE,
+				context={
+					"vendor_name": vendor.supplier_name,
+					"vendor": vendor.name,
+					"valid_until": frappe.utils.formatdate(valid_until),
+					"days_remaining": days_remaining,
+					"company_name": resolve_vendor_lifecycle_company_name(),
+				},
+				recipients=recipients,
+			)
+			actions.append((vendor.name, f"due-soon-{days_remaining}"))
+		except Exception:
+			frappe.log_error(
+				title="Sign Off Renewal: failed to send due-soon email", message=frappe.get_traceback()
+			)
+
+	return actions
+
+
+def send_signoff_renewal_draft_reminders():
+	"""Daily scheduler job. Same shape as
+	send_compliance_audit_renewal_draft_reminders, for Sign Off Renewal
+	drafts instead."""
+	from vendor_lifecycle.vendor_lifecycle.doctype.vendor_sign_off.vendor_sign_off import (
+		DEFAULT_SIGNOFF_RENEWAL_DRAFT_REMINDER_EMAIL_TEMPLATE,
+	)
+	from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
+		resolve_vendor_lifecycle_company_name,
+		send_vendor_lifecycle_email,
+		vendor_lifecycle_manager_emails,
+	)
+
+	settings = frappe.get_single("Vendor Lifecycle Settings")
+	if not settings.get("enable_signoff_renewal"):
+		return []
+
+	today = getdate(nowdate())
+	drafts = frappe.get_all(
+		"Vendor Sign Off",
+		filters={"is_renewal": 1, "docstatus": 0},
+		fields=["name", "vendor", "creation", "owner"],
+	)
+
+	reminded = []
+	for draft in drafts:
+		days_open = (today - getdate(draft.creation)).days
+		if days_open not in RENEWAL_DRAFT_REMINDER_DAYS:
+			continue
+
+		recipients = list(vendor_lifecycle_manager_emails())
+		if draft.owner != "Administrator":
+			creator_email = frappe.db.get_value("User", draft.owner, "email") or draft.owner
+			if creator_email and creator_email not in recipients:
+				recipients.append(creator_email)
+		if not recipients:
+			continue
+
+		try:
+			send_vendor_lifecycle_email(
+				doctype="Vendor Sign Off",
+				name=draft.name,
+				template_name=DEFAULT_SIGNOFF_RENEWAL_DRAFT_REMINDER_EMAIL_TEMPLATE,
+				context={
+					"vendor_name": frappe.db.get_value("Supplier", draft.vendor, "supplier_name"),
+					"vendor": draft.vendor,
+					"draft_name": draft.name,
+					"days_open": days_open,
+					"company_name": resolve_vendor_lifecycle_company_name(),
+					"draft_link": frappe.utils.get_url_to_form("Vendor Sign Off", draft.name),
+				},
+				recipients=recipients,
+			)
+			reminded.append(draft.name)
+		except Exception:
+			frappe.log_error(
+				title="Sign Off Renewal: failed to send draft reminder", message=frappe.get_traceback()
+			)
+
+	return reminded

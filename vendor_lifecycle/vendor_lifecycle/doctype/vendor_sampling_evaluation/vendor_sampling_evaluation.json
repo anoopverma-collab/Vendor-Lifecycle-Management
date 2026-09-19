@@ -6,8 +6,12 @@
  "document_type": "Document",
  "engine": "InnoDB",
  "field_order": [
+  "sampling_type",
   "kyc",
   "vendor",
+  "is_reboarding",
+  "is_renewal",
+  "reboarding_request",
   "onboarding_request",
   "evaluation_date",
   "column_break_top",
@@ -27,13 +31,23 @@
  ],
  "fields": [
   {
+   "fieldname": "sampling_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Type",
+   "options": "\nOnboarding\nReboarding\nAd-hoc",
+   "read_only_depends_on": "eval:doc.kyc || doc.reboarding_request",
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.sampling_type==\"Onboarding\"",
    "fieldname": "kyc",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Vendor KYC",
+   "mandatory_depends_on": "eval:doc.sampling_type==\"Onboarding\"",
    "options": "Vendor KYC",
-   "read_only": 1,
-   "reqd": 1
+   "read_only": 1
   },
   {
    "fieldname": "vendor",
@@ -41,10 +55,37 @@
    "in_list_view": 1,
    "label": "Vendor",
    "options": "Supplier",
-   "read_only": 1,
+   "read_only_depends_on": "eval:doc.sampling_type!=\"Ad-hoc\"",
    "reqd": 1
   },
   {
+   "default": "0",
+   "fieldname": "is_reboarding",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Is Re-boarding",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "description": "True for the \"Ad-hoc\" Type — named is_renewal (not is_adhoc) so this doctype reuses the exact same shared duplicate-check/sequencing logic Compliance Audit and Sign Off's own Renewal Type already use, unchanged.",
+   "fieldname": "is_renewal",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Is Ad-hoc",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.sampling_type==\"Reboarding\"",
+   "fieldname": "reboarding_request",
+   "fieldtype": "Link",
+   "label": "Vendor Reboarding Request",
+   "mandatory_depends_on": "eval:doc.sampling_type==\"Reboarding\"",
+   "options": "Vendor Reboarding Request",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.sampling_type==\"Onboarding\"",
    "fieldname": "onboarding_request",
    "fieldtype": "Link",
    "label": "Vendor Onboarding Request",
@@ -150,7 +191,7 @@
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2026-09-02 16:00:00.000000",
+ "modified": "2026-09-21 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Vendor Lifecycle",
  "name": "Vendor Sampling Evaluation",

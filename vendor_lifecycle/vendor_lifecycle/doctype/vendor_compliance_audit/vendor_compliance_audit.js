@@ -3,28 +3,24 @@
 
 frappe.ui.form.on("Vendor Compliance Audit", {
 	refresh(frm) {
-		// "Create Compliance Audit" (from Vendor KYC's "Create" dropdown, or
-		// the per-stage button on Vendor Background Check) opens a new
-		// document via frappe.new_doc(doctype, {kyc: ...}) — that prefill
-		// mechanism (route_options) sets the field with a raw property
-		// assignment, not frm.set_value(), so it never fires a "kyc
-		// changed" trigger and vendor (server-side auto-synced from the
-		// KYC's Supplier via sync_vendor_field, but only ever computed
-		// when the document is actually saved) is still blank the moment
-		// the form first renders. Since vendor is both mandatory and
-		// read-only, Frappe's own client-side "fill in mandatory fields"
-		// check would otherwise block the very first save attempt before
-		// the server ever gets a chance to fill it in — an unbreakable
-		// dead end, since the user has no way to type into a read-only
-		// field themselves. refresh() always fires regardless of how kyc
-		// got its value, so this fills vendor in immediately, before any
-		// save is attempted. (Same fix as Vendor Background Check.)
-		if (frm.is_new() && frm.doc.kyc && !frm.doc.vendor) {
-			frappe.db.get_value("Vendor KYC", frm.doc.kyc, "supplier").then((r) => {
-				if (r.message && r.message.supplier) {
-					frm.set_value("vendor", r.message.supplier);
-				}
-			});
+		// vendor is mandatory but only editable for a Renewal — for
+		// Onboarding/Reboarding it's auto-derived and must arrive already
+		// filled in, so every "Create" button that opens this doctype
+		// (Vendor KYC's own dropdown, Vendor Reboarding Request's own
+		// dropdown, Vendor Background Check's own "next stage" button)
+		// resolves vendor itself, synchronously, before opening this form —
+		// no lookup needed here at all.
+
+		// Onboarding/Reboarding are only ever legitimate when they arrive
+		// from one of those same "Create" buttons (kyc/reboarding_request
+		// already set — audit_type's own read_only_depends_on then locks
+		// the field so it can't be hand-changed away from that). Opened
+		// any other way (the plain "+ New" button, with no such context),
+		// the only thing left that ever makes sense to pick by hand is
+		// Renewal — there's no KYC/Reboarding Request to attach an
+		// Onboarding/Reboarding-flagged document to in that case.
+		if (frm.is_new() && !frm.doc.kyc && !frm.doc.reboarding_request) {
+			frm.set_df_property("audit_type", "options", "\nRenewal");
 		}
 
 		toggle_checklist_items_add_row(frm);
@@ -49,6 +45,17 @@ frappe.ui.form.on("Vendor Compliance Audit", {
 					__("This Failed result was force-overridden — reason: {0}", [frm.doc.force_override_reason]),
 					"orange"
 				);
+			} else if (frm.doc.is_renewal) {
+				// A Renewal isn't gating anything downstream, and never has
+				// a Force Override option — see stage_sequencing.
+				// force_override_stage's own is_renewal check.
+				frm.set_intro(
+					__(
+						"This Renewal has Failed. Whether the vendor's Supplier record was disabled because of" +
+							" this depends on the \"Disable Vendor on Compliance Audit Expiry/Failure\" setting."
+					),
+					"red"
+				);
 			} else {
 				frm.set_intro(
 					__(
@@ -62,12 +69,50 @@ frappe.ui.form.on("Vendor Compliance Audit", {
 		}
 
 		// A convenience shortcut to the next stage, right from here, once
-		// this one has actually passed — same eligibility check Vendor
-		// KYC's own "Create" dropdown uses (one active document per
-		// stage per vendor, this stage Passed, no Background Check
-		// Failure blocking everything downstream, etc.), so this can
-		// never offer something that would actually be rejected.
-		if (frm.doc.docstatus === 1 && frm.doc.kyc) {
+		// this one has actually passed. Re-boarding doesn't go through
+		// get_available_stages() at all — that's onboarding-only,
+		// kyc-scoped sequencing (see stage_sequencing.enforce_sequential_
+		// creation's is_reboarding branch, which no-ops entirely for a
+		// re-boarding document) — so a re-boarding-flagged Compliance
+		// Audit always offers this button once submitted, the same as
+		// Vendor Reboarding Request's own "Create" dropdown does; a
+		// duplicate attempt is still correctly refused server-side.
+		if (frm.doc.docstatus === 1 && frm.doc.is_reboarding) {
+			// Don't offer this once re-boarding is already done, or while
+			// Sampling Evaluation's own mandatory predecessor hasn't
+			// passed yet — see Vendor Background Check's own identical
+			// check.
+			frappe.call({
+				method: "vendor_lifecycle.vendor_lifecycle.doctype.vendor_reboarding_request.vendor_reboarding_request.get_reboarding_stage_info_for",
+				args: { reboarding_request: frm.doc.reboarding_request },
+			}).then((r) => {
+				const info = r.message || {};
+				if (info.reboarding_complete) return;
+				if ((info.missing_requirement || {})["Vendor Sampling Evaluation"]) return;
+				frm.add_custom_button(__("Sampling Evaluation"), () => {
+					const vendor = frm.doc.vendor;
+					// See Vendor KYC's own "Create" dropdown for why vendor
+					// is set this way, explicitly, once the new form is
+					// confirmed to exist — handing it over as a plain
+					// route_options value isn't reliable enough on its own
+					// for a mandatory field.
+					frappe.new_doc("Vendor Sampling Evaluation", {
+						reboarding_request: frm.doc.reboarding_request,
+						sampling_type: "Reboarding",
+					}).then(() => {
+						if (cur_frm && cur_frm.doctype === "Vendor Sampling Evaluation" && cur_frm.is_new()) {
+							cur_frm.set_value("vendor", vendor);
+						}
+					});
+				}, __("Create"));
+				frm.page.set_inner_btn_group_as_primary(__("Create"));
+			});
+		} else if (frm.doc.docstatus === 1 && frm.doc.kyc) {
+			// Same eligibility check Vendor KYC's own "Create" dropdown
+			// uses (one active document per stage per vendor, this stage
+			// Passed, no Background Check Failure blocking everything
+			// downstream, etc.), so this can never offer something that
+			// would actually be rejected.
 			frappe.call({
 				method: "vendor_lifecycle.vendor_lifecycle.stage_sequencing.get_available_stages",
 				args: { kyc: frm.doc.kyc },
@@ -75,7 +120,15 @@ frappe.ui.form.on("Vendor Compliance Audit", {
 				const stages = (r.message && r.message.stages) || [];
 				if (stages.includes("Vendor Sampling Evaluation")) {
 					frm.add_custom_button(__("Sampling Evaluation"), () => {
-						frappe.new_doc("Vendor Sampling Evaluation", { kyc: frm.doc.kyc });
+						const vendor = frm.doc.vendor;
+						frappe.new_doc("Vendor Sampling Evaluation", {
+							kyc: frm.doc.kyc,
+							sampling_type: "Onboarding",
+						}).then(() => {
+							if (cur_frm && cur_frm.doctype === "Vendor Sampling Evaluation" && cur_frm.is_new()) {
+								cur_frm.set_value("vendor", vendor);
+							}
+						});
 					}, __("Create"));
 					// Same primary-blue styling as Vendor KYC's own "Create"
 					// dropdown.

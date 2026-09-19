@@ -5,6 +5,7 @@ import frappe
 from frappe.model.document import Document
 
 from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
+	VENDOR_LIFECYCLE_STAGE_DEBOARDING,
 	get_kyc_vendor_contact,
 	resolve_vendor_lifecycle_company_name,
 	send_vendor_lifecycle_email,
@@ -73,6 +74,8 @@ class VendorDeboardingRequest(Document):
 		# only happens once the linked Vendor Deboarding Checklist is
 		# submitted (see VendorDeboardingChecklist.on_submit).
 		self.db_set("status", "Approved")
+		if self.vendor:
+			frappe.db.set_value("Supplier", self.vendor, "vendor_lifecycle_stage", VENDOR_LIFECYCLE_STAGE_DEBOARDING)
 		self._notify_approved()
 
 	@frappe.whitelist()
@@ -277,6 +280,35 @@ class VendorDeboardingRequest(Document):
 	@frappe.whitelist()
 	def get_open_transactions(self):
 		return get_open_transaction_counts(self.vendor)
+
+	@frappe.whitelist()
+	def get_pipeline_progress(self):
+		"""Just one stage — the linked Vendor Deboarding Checklist — shown
+		with the same colored progress bar Vendor Onboarding Request /
+		Vendor Reboarding Request's own pipeline widgets use, for a
+		consistent look across all three. Status is entirely the
+		Checklist's own: no Checklist yet -> Not Started; a Checklist
+		exists but hasn't been submitted -> In Progress; submitted ->
+		Completed. Only one non-cancelled Checklist can exist per Request
+		at a time (see Vendor Deboarding Checklist's own
+		_validate_only_one_checklist_per_request), so this is never
+		ambiguous about which record to look at."""
+		if self.docstatus != 1:
+			return []
+
+		checklist_docstatus = frappe.db.get_value(
+			"Vendor Deboarding Checklist",
+			{"deboarding_request": self.name, "docstatus": ["!=", 2]},
+			"docstatus",
+		)
+		if checklist_docstatus is None:
+			state = "Not Started"
+		elif checklist_docstatus == 0:
+			state = "In Progress"
+		else:
+			state = "Completed"
+
+		return [{"label": "Deboarding Checklist", "state": state}]
 
 
 def block_if_stopped(doc):

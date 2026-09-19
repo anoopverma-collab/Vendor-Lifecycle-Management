@@ -266,6 +266,10 @@ scheduler_events = {
 		"vendor_lifecycle.vendor_lifecycle.tasks.send_checklist_assignment_reminders",
 		"vendor_lifecycle.vendor_lifecycle.tasks.send_deboarding_checklist_followups",
 		"vendor_lifecycle.vendor_lifecycle.tasks.send_signoff_followups",
+		"vendor_lifecycle.vendor_lifecycle.tasks.send_compliance_audit_renewal_notices",
+		"vendor_lifecycle.vendor_lifecycle.tasks.send_compliance_audit_renewal_draft_reminders",
+		"vendor_lifecycle.vendor_lifecycle.tasks.send_signoff_renewal_notices",
+		"vendor_lifecycle.vendor_lifecycle.tasks.send_signoff_renewal_draft_reminders",
 	],
 	# Needs a specific time (2 AM), unlike the "daily" bucket above which
 	# just runs sometime during Frappe's own daily scheduler window.

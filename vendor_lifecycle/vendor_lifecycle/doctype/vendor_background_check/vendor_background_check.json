@@ -8,6 +8,8 @@
  "field_order": [
   "kyc",
   "vendor",
+  "is_reboarding",
+  "reboarding_request",
   "conducted_by_external_agency",
   "conducted_by",
   "column_break_top_2",
@@ -43,13 +45,14 @@
  ],
  "fields": [
   {
+   "depends_on": "eval:!doc.is_reboarding",
    "fieldname": "kyc",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Vendor KYC",
+   "mandatory_depends_on": "eval:!doc.is_reboarding",
    "options": "Vendor KYC",
-   "read_only_depends_on": "eval:!doc.__islocal",
-   "reqd": 1
+   "read_only_depends_on": "eval:!doc.__islocal"
   },
   {
    "fieldname": "vendor",
@@ -59,6 +62,22 @@
    "options": "Supplier",
    "read_only": 1,
    "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_reboarding",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Is Re-boarding",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.is_reboarding",
+   "fieldname": "reboarding_request",
+   "fieldtype": "Link",
+   "label": "Vendor Reboarding Request",
+   "options": "Vendor Reboarding Request",
+   "read_only": 1
   },
   {
    "default": "0",
@@ -78,6 +97,7 @@
    "fieldtype": "Column Break"
   },
   {
+   "depends_on": "eval:!doc.is_reboarding",
    "fieldname": "onboarding_request",
    "fieldtype": "Link",
    "label": "Vendor Onboarding Request",
@@ -279,7 +299,7 @@
    "link_fieldname": "background_check"
   }
  ],
- "modified": "2026-09-03 18:00:00.000000",
+ "modified": "2026-09-18 20:00:00.000000",
  "modified_by": "Administrator",
  "module": "Vendor Lifecycle",
  "name": "Vendor Background Check",

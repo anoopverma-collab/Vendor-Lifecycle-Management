@@ -268,6 +268,17 @@ frappe.ui.form.on("Vendor KYC", {
 			"Vendor Sampling Evaluation": "Sampling Evaluation",
 			"Vendor Sign Off": "Sign-off",
 		};
+		// Doctypes with their own Onboarding/Reboarding/Renewal Type field
+		// (see e.g. Vendor Compliance Audit's own audit_type) — mapped here
+		// so this one dropdown can prefill the right one for each, without
+		// the target form needing any lookup of its own. A doctype not
+		// listed here (Background Check, today) simply gets no type field
+		// prefilled, same as before.
+		const stage_type_fields = {
+			"Vendor Compliance Audit": "audit_type",
+			"Vendor Sampling Evaluation": "sampling_type",
+			"Vendor Sign Off": "signoff_type",
+		};
 		frm.call("get_available_stages").then((r) => {
 			const result = r.message || {};
 			if (result.stopped) {
@@ -286,7 +297,25 @@ frappe.ui.form.on("Vendor KYC", {
 						? __("Retry Sign-off")
 						: __(stage_labels[doctype]);
 				frm.add_custom_button(label, () => {
-					frappe.new_doc(doctype, { kyc: frm.doc.name });
+					const type_field = stage_type_fields[doctype];
+					const vendor = frm.doc.supplier;
+					// Handing vendor over as a route_options value (like kyc
+					// above) isn't reliable enough on its own for a mandatory
+					// field — confirmed the hard way (a real "Vendor is
+					// required" block on the freshly-opened form even though
+					// it was included right here). Explicitly set_value()-ing
+					// it once frappe.new_doc's own promise confirms the new
+					// form actually exists is the one mechanism guaranteed to
+					// stick, without going back to an async DB lookup (the
+					// value's already in hand here, no round trip needed).
+					frappe.new_doc(doctype, {
+						kyc: frm.doc.name,
+						...(type_field ? { [type_field]: "Onboarding" } : {}),
+					}).then(() => {
+						if (cur_frm && cur_frm.doctype === doctype && cur_frm.is_new()) {
+							cur_frm.set_value("vendor", vendor);
+						}
+					});
 				}, __("Create"));
 			}
 			// Purchase Invoice creation only ever happens via "Bill to
@@ -335,6 +364,20 @@ frappe.ui.form.on("Vendor KYC", {
 						"This vendor's Sampling Evaluation was Rejected — next onboarding stages cannot" +
 							" proceed, and the Supplier record has been disabled."
 					),
+					"red"
+				);
+			}
+
+			// Sign-off is the LAST stage, so unlike the three banners above
+			// there's no "next stage" to block — this is purely
+			// informational, and sign_off_is_retry (from the same
+			// get_available_stages() call) already means exactly "the
+			// latest submitted Sign Off is Failed, and hasn't been retried
+			// yet" — no separate server check needed for this.
+			if (result.sign_off_is_retry) {
+				frm.dashboard.clear_headline();
+				frm.set_intro(
+					__("This vendor's Sign-off has Failed — the Supplier record has been disabled. Use \"Retry Sign-off\" above once ready."),
 					"red"
 				);
 			}

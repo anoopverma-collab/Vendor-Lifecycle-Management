@@ -153,6 +153,12 @@ def after_install():
 def after_migrate():
 	sync_standard_files()
 	backfill_kyc_billing_currency()
+	backfill_vendor_lifecycle_stage()
+	backfill_compliance_audit_type()
+	backfill_supplier_compliance_audit_valid_until()
+	backfill_signoff_type()
+	backfill_supplier_contract_valid_until()
+	backfill_sampling_type()
 	backfill_team_size_buckets()
 	backfill_settings_defaults()
 	backfill_last_satisfaction_survey_date()
@@ -1038,6 +1044,11 @@ VENDOR_KYC_WORKFLOW_STATES = {
 	"Approved": ("1", "Vendor Lifecycle Manager", None),  # reused as-is - already styled Success
 	"Rejected": ("0", "Vendor Lifecycle Manager", None),  # reused as-is - already styled Danger
 	"Cancelled": ("2", "Vendor Lifecycle Manager", None),  # reused as-is
+	# A User can discard an abandoned/mistaken KYC before ever sending it
+	# for approval; only a Manager can then edit it further (enforced by
+	# Frappe's own Workflow permission engine via allow_edit, no extra
+	# code needed) - a terminal state, same as Rejected, not a bounce-back.
+	"Trashed": ("0", "Vendor Lifecycle Manager", "Inverse"),
 }
 # (state, action, next_state, allowed role) - one role per transition, per
 # the actual review split: only a User can send for approval, only a
@@ -1047,11 +1058,39 @@ VENDOR_KYC_WORKFLOW_TRANSITIONS = [
 	("Approval Pending", "Approve", "Approved", "Vendor Lifecycle Manager"),
 	("Approval Pending", "Reject", "Rejected", "Vendor Lifecycle Manager"),
 	("Approved", "Cancel", "Cancelled", "Vendor Lifecycle Manager"),
+	("In Progress", "Trash", "Trashed", "Vendor Lifecycle User"),
+]
+
+# Same shape as Vendor KYC's own workflow above, for Vendor Reboarding
+# Request - deliberately its own separate spec, not a shared constant,
+# consistent with keeping Re-boarding's own settings/logic independent of
+# the onboarding pipeline's (see the Re-boarding feature's own design
+# notes) - only the generic installer plumbing below is actually shared.
+VENDOR_REBOARDING_REQUEST_WORKFLOW_STATES = {
+	"In Progress": ("0", "Vendor Lifecycle User", "Warning"),
+	"Approval Pending": ("0", "Vendor Lifecycle Manager", "Info"),
+	"Approved": ("1", "Vendor Lifecycle Manager", None),
+	"Rejected": ("0", "Vendor Lifecycle Manager", None),
+	"Cancelled": ("2", "Vendor Lifecycle Manager", None),
+	"Trashed": ("0", "Vendor Lifecycle Manager", "Inverse"),
+}
+VENDOR_REBOARDING_REQUEST_WORKFLOW_TRANSITIONS = [
+	("In Progress", "Send for Approval", "Approval Pending", "Vendor Lifecycle User"),
+	("Approval Pending", "Approve", "Approved", "Vendor Lifecycle Manager"),
+	("Approval Pending", "Reject", "Rejected", "Vendor Lifecycle Manager"),
+	("Approved", "Cancel", "Cancelled", "Vendor Lifecycle Manager"),
+	("In Progress", "Trash", "Trashed", "Vendor Lifecycle User"),
 ]
 
 
-def install_vendor_kyc_workflow():
-	for state, (_doc_status, _allow_edit, style) in VENDOR_KYC_WORKFLOW_STATES.items():
+def _install_workflow(document_type, states, transitions):
+	"""Shared installer for any (states, transitions) spec shaped like
+	VENDOR_KYC_WORKFLOW_STATES/_TRANSITIONS above - generic plumbing
+	(create missing Workflow State/Workflow Action Master fixtures,
+	diff-and-resync the Workflow document itself), not a business rule,
+	so sharing it doesn't conflict with keeping each doctype's own
+	mandatory-check settings/logic independent."""
+	for state, (_doc_status, _allow_edit, style) in states.items():
 		if frappe.db.exists("Workflow State", state):
 			continue
 		frappe.get_doc({
@@ -1062,13 +1101,13 @@ def install_vendor_kyc_workflow():
 
 	# A fresh site only ships 3 default Workflow Action Master records
 	# (Approve/Reject/Review, seeded by frappe/utils/install.py) - any other
-	# action name, like our own "Send for Approval"/"Cancel", normally only
-	# gets created as a side effect of typing it into the Workflow Builder
-	# UI. Since this Workflow is created here in code, never through that
-	# UI, create whichever ones are missing ourselves first - otherwise the
-	# Workflow Transition rows below fail link validation on a truly fresh
-	# install.
-	actions = {action for _state, action, _next_state, _allowed in VENDOR_KYC_WORKFLOW_TRANSITIONS}
+	# action name, like our own "Send for Approval"/"Cancel"/"Trash",
+	# normally only gets created as a side effect of typing it into the
+	# Workflow Builder UI. Since this Workflow is created here in code,
+	# never through that UI, create whichever ones are missing ourselves
+	# first - otherwise the Workflow Transition rows below fail link
+	# validation on a truly fresh install.
+	actions = {action for _state, action, _next_state, _allowed in transitions}
 	for action in actions:
 		if not frappe.db.exists("Workflow Action Master", action):
 			frappe.get_doc({
@@ -1076,12 +1115,12 @@ def install_vendor_kyc_workflow():
 				"workflow_action_name": action,
 			}).insert(ignore_permissions=True)
 
-	if frappe.db.exists("Workflow", "Vendor KYC"):
-		workflow = frappe.get_doc("Workflow", "Vendor KYC")
+	if frappe.db.exists("Workflow", document_type):
+		workflow = frappe.get_doc("Workflow", document_type)
 	else:
 		workflow = frappe.new_doc("Workflow")
-		workflow.workflow_name = "Vendor KYC"
-		workflow.document_type = "Vendor KYC"
+		workflow.workflow_name = document_type
+		workflow.document_type = document_type
 		workflow.is_active = 1
 		workflow.send_email_alert = 0
 
@@ -1097,35 +1136,36 @@ def install_vendor_kyc_workflow():
 	workflow.workflow_state_field = "workflow_state"
 
 	# Rebuilt from the spec above every time rather than diffed - this is
-	# the one workflow the app installs, so there's nothing a site admin
-	# could have customized on it yet to preserve; simplest way to keep it
-	# in sync as the spec itself changes (e.g. adding Approval Pending here).
+	# the one workflow each of these doctypes installs, so there's
+	# nothing a site admin could have customized on it yet to preserve;
+	# simplest way to keep it in sync as the spec itself changes (e.g.
+	# adding a new state here).
 	current_states = [
 		(s.state, s.doc_status, s.allow_edit) for s in workflow.states
 	]
 	desired_states = [
 		(state, doc_status, allow_edit)
-		for state, (doc_status, allow_edit, _style) in VENDOR_KYC_WORKFLOW_STATES.items()
+		for state, (doc_status, allow_edit, _style) in states.items()
 	]
 	current_transitions = [
 		(t.state, t.action, t.next_state, t.allowed) for t in workflow.transitions
 	]
 	if (
 		current_states == desired_states
-		and current_transitions == VENDOR_KYC_WORKFLOW_TRANSITIONS
+		and current_transitions == transitions
 		and not state_field_changed
 	):
 		return
 
 	workflow.set("states", [])
 	workflow.set("transitions", [])
-	for state, (doc_status, allow_edit, _style) in VENDOR_KYC_WORKFLOW_STATES.items():
+	for state, (doc_status, allow_edit, _style) in states.items():
 		workflow.append("states", {
 			"state": state,
 			"doc_status": doc_status,
 			"allow_edit": allow_edit,
 		})
-	for state, action, next_state, allowed in VENDOR_KYC_WORKFLOW_TRANSITIONS:
+	for state, action, next_state, allowed in transitions:
 		workflow.append("transitions", {
 			"state": state,
 			"action": action,
@@ -1137,6 +1177,18 @@ def install_vendor_kyc_workflow():
 		workflow.insert(ignore_permissions=True)
 	else:
 		workflow.save(ignore_permissions=True)
+
+
+def install_vendor_kyc_workflow():
+	_install_workflow("Vendor KYC", VENDOR_KYC_WORKFLOW_STATES, VENDOR_KYC_WORKFLOW_TRANSITIONS)
+
+
+def install_vendor_reboarding_request_workflow():
+	_install_workflow(
+		"Vendor Reboarding Request",
+		VENDOR_REBOARDING_REQUEST_WORKFLOW_STATES,
+		VENDOR_REBOARDING_REQUEST_WORKFLOW_TRANSITIONS,
+	)
 
 
 def migrate_supplier_hold_to_is_frozen():
@@ -1285,6 +1337,10 @@ SETTINGS_FIELD_DEFAULTS = {
 	"satisfaction_survey_reminder_emails": 1,
 	"support_ticket_emails": 1,
 	"support_ticket_escalation_emails": 1,
+	"compliance_audit_renewal_due_emails": 1,
+	"compliance_audit_renewal_draft_reminder_emails": 1,
+	"signoff_renewal_due_emails": 1,
+	"signoff_renewal_draft_reminder_emails": 1,
 }
 
 
@@ -1356,6 +1412,160 @@ def backfill_kyc_billing_currency():
 			# nothing safe to backfill with; leave it for a human to set.
 			continue
 		frappe.db.set_value("Vendor KYC", row.name, "billing_currency", currency)
+
+
+def backfill_vendor_lifecycle_stage():
+	# vendor_lifecycle_stage is a new, coarser companion to
+	# vendor_lifecycle_status (the fine-grained detail) — every Supplier
+	# that already had the fine status before this new field existed needs
+	# its coarse stage worked out from that, once, the same "backfill
+	# every existing row" rule as backfill_kyc_billing_currency above. Only
+	# ever fills in a currently-blank vendor_lifecycle_stage, so this is
+	# safe to run on every migrate — a real value here is never clobbered.
+	from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
+		VENDOR_LIFECYCLE_STAGE_DEBOARDED,
+		VENDOR_LIFECYCLE_STAGE_ONBOARDING,
+		resolve_settled_active_stage,
+	)
+
+	onboarding_in_flight_statuses = {
+		"KYC Verified",
+		"Background Check In Progress", "Background Verified", "Background Check Failed",
+		"Compliance Audit In Progress", "Audit Verified", "Compliance Audit Failed",
+		"Sampling In Progress", "Sampling Approved", "Sampling Rejected",
+		"Sign Off In Progress",
+	}
+	deboarded_statuses = {"Disabled", "Temporarily Enabled", "Deboarding Initiated"}
+
+	affected = frappe.get_all(
+		"Supplier",
+		filters={"vendor_lifecycle_status": ["is", "set"], "vendor_lifecycle_stage": ["is", "not set"]},
+		fields=["name", "vendor_lifecycle_status"],
+	)
+	for row in affected:
+		status = row.vendor_lifecycle_status
+		if status in onboarding_in_flight_statuses:
+			stage = VENDOR_LIFECYCLE_STAGE_ONBOARDING
+		elif status == "Active":
+			stage = resolve_settled_active_stage(row.name)
+		elif status in deboarded_statuses:
+			stage = VENDOR_LIFECYCLE_STAGE_DEBOARDED
+		else:
+			# Unrecognized/legacy value ("Signed" — never actually
+			# assigned anywhere in this app's own code) — leave blank
+			# rather than guess.
+			continue
+		frappe.db.set_value("Supplier", row.name, "vendor_lifecycle_stage", stage, update_modified=False)
+
+
+def backfill_compliance_audit_type():
+	# audit_type is new — every existing Vendor Compliance Audit only ever
+	# had the plain is_reboarding boolean, so it's worked out from that,
+	# once. Only ever fills in a currently-blank audit_type, same
+	# "backfill every existing row, never clobber a real value" rule as
+	# backfill_vendor_lifecycle_stage above. Direct SQL — a pure data
+	# backfill of a non-validated field, no need to load full documents.
+	frappe.db.sql(
+		"""
+		update `tabVendor Compliance Audit`
+		set audit_type = if(is_reboarding, 'Reboarding', 'Onboarding')
+		where audit_type is null or audit_type = ''
+		"""
+	)
+
+
+def backfill_supplier_compliance_audit_valid_until():
+	# New Supplier-level mirror of "when does this vendor's Compliance
+	# Audit currently expire" — every Supplier that already has a Passed,
+	# submitted Compliance Audit on file (onboarding, re-boarding, or
+	# Renewal — whichever is most recent) gets it backfilled once. Only
+	# ever fills in a currently-blank compliance_audit_valid_until.
+	rows = frappe.db.sql(
+		"""
+		select vca.vendor, vca.valid_until
+		from `tabVendor Compliance Audit` vca
+		inner join (
+			select vendor, max(audit_date) as latest_audit_date
+			from `tabVendor Compliance Audit`
+			where docstatus = 1 and outcome = 'Passed' and vendor is not null and vendor != ''
+			group by vendor
+		) latest on latest.vendor = vca.vendor and latest.latest_audit_date = vca.audit_date
+		where vca.docstatus = 1 and vca.outcome = 'Passed'
+		""",
+		as_dict=True,
+	)
+	for row in rows:
+		if not row.valid_until:
+			continue
+		current = frappe.db.get_value("Supplier", row.vendor, "compliance_audit_valid_until")
+		if not current:
+			frappe.db.set_value(
+				"Supplier", row.vendor, "compliance_audit_valid_until", row.valid_until, update_modified=False
+			)
+
+
+def backfill_signoff_type():
+	# signoff_type is new — every existing Vendor Sign Off only ever had
+	# the plain is_reboarding boolean, so it's worked out from that, once
+	# — same "backfill every existing row, never clobber a real value"
+	# rule as backfill_compliance_audit_type above.
+	frappe.db.sql(
+		"""
+		update `tabVendor Sign Off`
+		set signoff_type = if(is_reboarding, 'Reboarding', 'Onboarding')
+		where signoff_type is null or signoff_type = ''
+		"""
+	)
+
+
+def backfill_sampling_type():
+	# sampling_type is new — every existing Vendor Sampling Evaluation only
+	# ever had the plain is_reboarding boolean, so it's worked out from
+	# that, once — same "backfill every existing row, never clobber a real
+	# value" rule as backfill_compliance_audit_type above. Ad-hoc is never
+	# backfilled here — it didn't exist as a concept before this field did,
+	# so every pre-existing row was necessarily Onboarding or Reboarding.
+	frappe.db.sql(
+		"""
+		update `tabVendor Sampling Evaluation`
+		set sampling_type = if(is_reboarding, 'Reboarding', 'Onboarding')
+		where sampling_type is null or sampling_type = ''
+		"""
+	)
+
+
+def backfill_supplier_contract_valid_until():
+	# New Supplier-level mirror of "when does this vendor's contract
+	# currently expire" — every Supplier that already has a Passed,
+	# submitted Sign Off on file (onboarding, re-boarding, or Renewal —
+	# whichever is most recent) gets it backfilled once, if that Sign Off
+	# happens to have a Contract Validity on it. Only ever fills in a
+	# currently-blank contract_valid_until. Sign Off has no business-date
+	# field of its own (unlike Compliance Audit's audit_date), so "most
+	# recent" is by creation — same tie-breaker already used by this
+	# doctype's own on_cancel revert logic.
+	rows = frappe.db.sql(
+		"""
+		select vso.vendor, vso.contract_validity
+		from `tabVendor Sign Off` vso
+		inner join (
+			select vendor, max(creation) as latest_creation
+			from `tabVendor Sign Off`
+			where docstatus = 1 and sign_off_failed = 0 and vendor is not null and vendor != ''
+			group by vendor
+		) latest on latest.vendor = vso.vendor and latest.latest_creation = vso.creation
+		where vso.docstatus = 1 and vso.sign_off_failed = 0
+		""",
+		as_dict=True,
+	)
+	for row in rows:
+		if not row.contract_validity:
+			continue
+		current = frappe.db.get_value("Supplier", row.vendor, "contract_valid_until")
+		if not current:
+			frappe.db.set_value(
+				"Supplier", row.vendor, "contract_valid_until", row.contract_validity, update_modified=False
+			)
 
 
 def backfill_settings_defaults():
@@ -2393,6 +2603,106 @@ def backfill_default_deboarding_request_email_templates():
 		}).insert(ignore_permissions=True)
 
 
+DEFAULT_REBOARDING_REQUEST_RECEIVED_EMAIL_TEMPLATE = "Vendor Reboarding Request Received"
+DEFAULT_REBOARDING_REQUEST_APPROVED_EMAIL_TEMPLATE = "Vendor Reboarding Request Approved"
+DEFAULT_REBOARDING_REQUEST_REJECTED_EMAIL_TEMPLATE = "Vendor Reboarding Request Rejected"
+DEFAULT_REBOARDING_REQUEST_APPROVED_CREATOR_EMAIL_TEMPLATE = "Vendor Reboarding Request Approved - Creator Copy"
+DEFAULT_REBOARDING_REQUEST_REJECTED_CREATOR_EMAIL_TEMPLATE = "Vendor Reboarding Request Rejected - Creator Copy"
+
+
+def backfill_default_reboarding_request_email_templates():
+	# All three are vendor-facing (the supplier being reconsidered), unlike
+	# Deboarding Request's own Created/Rejected (internal-only) - there's
+	# no internal "request raised" email here since this is always staff-
+	# initiated in the first place; the vendor only needs to hear about it
+	# once it's actually under review.
+	if not frappe.db.exists("Email Template", DEFAULT_REBOARDING_REQUEST_RECEIVED_EMAIL_TEMPLATE):
+		body = (
+			"<p>Dear {{ contact_person_name or 'Sir/Madam' }},</p>"
+			"<p>We have received a request to re-board your account with {{ company_name }}"
+			" (<b>{{ request_name }}</b>), and it is now under review.</p>"
+			+ _info_box(SIGNOFF_REQUEST_ACCENT, "Requested On: {{ request_date }}")
+			+ "<p>We'll be in touch once a decision has been made.</p>"
+			"<p>Thank you,<br>{{ company_name }}</p>"
+		)
+		frappe.get_doc({
+			"doctype": "Email Template",
+			"name": DEFAULT_REBOARDING_REQUEST_RECEIVED_EMAIL_TEMPLATE,
+			"subject": "Your Re-boarding Request Has Been Received",
+			"response": _signoff_email_shell(SIGNOFF_REQUEST_ACCENT, "Received", "Re-boarding Request Received", body),
+		}).insert(ignore_permissions=True)
+
+	if not frappe.db.exists("Email Template", DEFAULT_REBOARDING_REQUEST_APPROVED_EMAIL_TEMPLATE):
+		body = (
+			"<p>Dear {{ contact_person_name or 'Sir/Madam' }},</p>"
+			"<p>We're pleased to let you know that your re-boarding request with {{ company_name }}"
+			" (<b>{{ request_name }}</b>) has been approved.</p>"
+			"<p>We'll be in touch shortly about next steps.</p>"
+			"<p>Thank you,<br>{{ company_name }}</p>"
+		)
+		frappe.get_doc({
+			"doctype": "Email Template",
+			"name": DEFAULT_REBOARDING_REQUEST_APPROVED_EMAIL_TEMPLATE,
+			"subject": "Your Re-boarding Request Has Been Approved",
+			"response": _signoff_email_shell(SIGNOFF_PASSED_ACCENT, "Approved", "Re-boarding Request Approved", body),
+		}).insert(ignore_permissions=True)
+
+	if not frappe.db.exists("Email Template", DEFAULT_REBOARDING_REQUEST_REJECTED_EMAIL_TEMPLATE):
+		body = (
+			"<p>Dear {{ contact_person_name or 'Sir/Madam' }},</p>"
+			"<p>After review, your re-boarding request with {{ company_name }} (<b>{{ request_name }}</b>) has"
+			" not been approved at this time.</p>"
+			"<p>Thank you,<br>{{ company_name }}</p>"
+		)
+		frappe.get_doc({
+			"doctype": "Email Template",
+			"name": DEFAULT_REBOARDING_REQUEST_REJECTED_EMAIL_TEMPLATE,
+			"subject": "Your Re-boarding Request Has Been Rejected",
+			"response": _signoff_email_shell(SIGNOFF_FAILED_ACCENT, "Rejected", "Re-boarding Request Rejected", body),
+		}).insert(ignore_permissions=True)
+
+
+def backfill_default_reboarding_request_creator_email_templates():
+	# Internal-only, unlike the three vendor-facing ones above — goes to
+	# whoever raised the Request (self.owner), not the vendor, same
+	# reasoning as Vendor Deboarding Request's own Rejected email
+	# (_notify_rejected_unsafe there): the creator has no other way to
+	# find out a decision was made unless they keep checking the document
+	# by hand. A separate, later patch (not folded into the original
+	# backfill_default_reboarding_request_email_templates above) since
+	# that one already ran on every existing site by the time these two
+	# were added — see this app's own patches.txt convention.
+	if not frappe.db.exists("Email Template", DEFAULT_REBOARDING_REQUEST_APPROVED_CREATOR_EMAIL_TEMPLATE):
+		body = (
+			"<p>Hi,</p>"
+			"<p>The Vendor Reboarding Request you raised, <b>{{ request_name }}</b>"
+			"{% if vendor_name %} for {{ vendor_name }}{% endif %}, has been <b>Approved</b>.</p>"
+			"<p>You can now create Background Check, Compliance Audit, Sampling Evaluation, and Sign-off"
+			" documents against it.</p>"
+			"<p>Thank you,<br>{{ company_name }}</p>"
+		)
+		frappe.get_doc({
+			"doctype": "Email Template",
+			"name": DEFAULT_REBOARDING_REQUEST_APPROVED_CREATOR_EMAIL_TEMPLATE,
+			"subject": "Vendor Reboarding Request {{ request_name }} Approved",
+			"response": _signoff_email_shell(SIGNOFF_PASSED_ACCENT, "Approved", "Re-boarding Request Approved", body),
+		}).insert(ignore_permissions=True)
+
+	if not frappe.db.exists("Email Template", DEFAULT_REBOARDING_REQUEST_REJECTED_CREATOR_EMAIL_TEMPLATE):
+		body = (
+			"<p>Hi,</p>"
+			"<p>The Vendor Reboarding Request you raised, <b>{{ request_name }}</b>"
+			"{% if vendor_name %} for {{ vendor_name }}{% endif %}, has been <b>Rejected</b>.</p>"
+			"<p>Thank you,<br>{{ company_name }}</p>"
+		)
+		frappe.get_doc({
+			"doctype": "Email Template",
+			"name": DEFAULT_REBOARDING_REQUEST_REJECTED_CREATOR_EMAIL_TEMPLATE,
+			"subject": "Vendor Reboarding Request {{ request_name }} Rejected",
+			"response": _signoff_email_shell(SIGNOFF_FAILED_ACCENT, "Rejected", "Re-boarding Request Rejected", body),
+		}).insert(ignore_permissions=True)
+
+
 def migrate_is_resolvable_check_to_select():
 	# is_resolvable was a plain Check (0/1); it's now a mandatory Select
 	# (Yes/No/Maybe) so a value has to be a deliberate choice, not a silent
@@ -2595,5 +2905,98 @@ def backfill_default_manual_attach_needed_email_template():
 			"subject": "Manual Attachment Needed — {{ doctype_label }} {{ document_name }}",
 			"response": _signoff_email_shell(
 				VENDOR_LIFECYCLE_INTERNAL_ACCENT, "Action Needed", "Manual Attachment Needed", body
+			),
+		}).insert(ignore_permissions=True)
+
+
+DEFAULT_COMPLIANCE_AUDIT_RENEWAL_DUE_EMAIL_TEMPLATE = "Compliance Audit Renewal Due"
+DEFAULT_COMPLIANCE_AUDIT_RENEWAL_DRAFT_REMINDER_EMAIL_TEMPLATE = "Compliance Audit Renewal Draft Reminder"
+
+
+def backfill_default_compliance_audit_renewal_email_templates():
+	# Both internal-only (sent to the Vendor Lifecycle Manager, and the
+	# draft's own creator where relevant) - see tasks.
+	# send_compliance_audit_renewal_notices / _draft_reminders.
+	if not frappe.db.exists("Email Template", DEFAULT_COMPLIANCE_AUDIT_RENEWAL_DUE_EMAIL_TEMPLATE):
+		body = (
+			"<p>Hello,</p>"
+			"<p><b>{{ vendor_name }}</b> ({{ vendor }})'s Compliance Audit is valid until"
+			" <b>{{ valid_until }}</b> - {{ days_remaining }} day(s) from now.</p>"
+			+ _info_box(
+				VENDOR_LIFECYCLE_INTERNAL_ACCENT,
+				"Start (or check on) a Renewal Compliance Audit for this vendor before it lapses.",
+			)
+			+ "<p>Thank you,<br>{{ company_name }}</p>"
+		)
+		frappe.get_doc({
+			"doctype": "Email Template",
+			"name": DEFAULT_COMPLIANCE_AUDIT_RENEWAL_DUE_EMAIL_TEMPLATE,
+			"subject": "Compliance Audit Renewal Due Soon - {{ vendor_name }}",
+			"response": _signoff_email_shell(
+				VENDOR_LIFECYCLE_INTERNAL_ACCENT, "Reminder", "Compliance Audit Renewal Due Soon", body
+			),
+		}).insert(ignore_permissions=True)
+
+	if not frappe.db.exists("Email Template", DEFAULT_COMPLIANCE_AUDIT_RENEWAL_DRAFT_REMINDER_EMAIL_TEMPLATE):
+		body = (
+			"<p>Hello,</p>"
+			"<p>The Renewal Compliance Audit <b>{{ draft_name }}</b> for <b>{{ vendor_name }}</b> ({{ vendor }})"
+			" has been sitting as a draft for {{ days_open }} day(s).</p>"
+			+ '<p><a href="{{ draft_link }}">Open it</a> and complete it.</p>'
+			+ "<p>Thank you,<br>{{ company_name }}</p>"
+		)
+		frappe.get_doc({
+			"doctype": "Email Template",
+			"name": DEFAULT_COMPLIANCE_AUDIT_RENEWAL_DRAFT_REMINDER_EMAIL_TEMPLATE,
+			"subject": "Renewal Compliance Audit Still Pending - {{ vendor_name }}",
+			"response": _signoff_email_shell(
+				VENDOR_LIFECYCLE_INTERNAL_ACCENT, "Reminder", "Renewal Compliance Audit Still Pending", body
+			),
+		}).insert(ignore_permissions=True)
+
+
+DEFAULT_SIGNOFF_RENEWAL_DUE_EMAIL_TEMPLATE = "Sign Off Renewal Due"
+DEFAULT_SIGNOFF_RENEWAL_DRAFT_REMINDER_EMAIL_TEMPLATE = "Sign Off Renewal Draft Reminder"
+
+
+def backfill_default_signoff_renewal_email_templates():
+	# Both internal-only (sent to the Vendor Lifecycle Manager, and the
+	# draft's own creator where relevant) - see tasks.
+	# send_signoff_renewal_notices / _draft_reminders. Same shape as
+	# backfill_default_compliance_audit_renewal_email_templates.
+	if not frappe.db.exists("Email Template", DEFAULT_SIGNOFF_RENEWAL_DUE_EMAIL_TEMPLATE):
+		body = (
+			"<p>Hello,</p>"
+			"<p><b>{{ vendor_name }}</b> ({{ vendor }})'s contract is valid until"
+			" <b>{{ valid_until }}</b> - {{ days_remaining }} day(s) from now.</p>"
+			+ _info_box(
+				VENDOR_LIFECYCLE_INTERNAL_ACCENT,
+				"Start (or check on) a Renewal Sign Off for this vendor before it lapses.",
+			)
+			+ "<p>Thank you,<br>{{ company_name }}</p>"
+		)
+		frappe.get_doc({
+			"doctype": "Email Template",
+			"name": DEFAULT_SIGNOFF_RENEWAL_DUE_EMAIL_TEMPLATE,
+			"subject": "Contract Renewal Due Soon - {{ vendor_name }}",
+			"response": _signoff_email_shell(
+				VENDOR_LIFECYCLE_INTERNAL_ACCENT, "Reminder", "Contract Renewal Due Soon", body
+			),
+		}).insert(ignore_permissions=True)
+
+	if not frappe.db.exists("Email Template", DEFAULT_SIGNOFF_RENEWAL_DRAFT_REMINDER_EMAIL_TEMPLATE):
+		body = (
+			"<p>Hello,</p>"
+			"<p>The Renewal Sign Off <b>{{ draft_name }}</b> for <b>{{ vendor_name }}</b> ({{ vendor }}) has been"
+			" sitting as a draft for {{ days_open }} day(s).</p>"
+			+ '<p><a href="{{ draft_link }}">Open it</a> and complete it.</p>'
+			+ "<p>Thank you,<br>{{ company_name }}</p>"
+		)
+		frappe.get_doc({
+			"doctype": "Email Template",
+			"name": DEFAULT_SIGNOFF_RENEWAL_DRAFT_REMINDER_EMAIL_TEMPLATE,
+			"subject": "Renewal Sign Off Still Pending - {{ vendor_name }}",
+			"response": _signoff_email_shell(
+				VENDOR_LIFECYCLE_INTERNAL_ACCENT, "Reminder", "Renewal Sign Off Still Pending", body
 			),
 		}).insert(ignore_permissions=True)

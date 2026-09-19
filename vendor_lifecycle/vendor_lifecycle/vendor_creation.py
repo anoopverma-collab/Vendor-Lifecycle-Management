@@ -3,7 +3,66 @@
 
 import frappe
 
+# --- vendor_lifecycle_status (fine-grained — "what's happening right
+# now") -----------------------------------------------------------------
+# Centralized here, rather than one set of constants per doctype as
+# before, because the shared revert/walk-back logic further down
+# (resolve_current_stage_status, revert_stage_result) needs to read every
+# stage's own status string regardless of which doctype's own cancel/
+# force-override triggered the check — Background Check reverting needs
+# to know Sampling Evaluation's and Compliance Audit's own labels just as
+# much as Vendor Sign Off already did, and Python can't support that
+# cross-referencing as a set of already-established one-way imports
+# between the 4 doctype files themselves (that would be a real circular
+# import). Each doctype's own .py still imports whichever of these it
+# actually uses, by name, from here.
 VENDOR_LIFECYCLE_STATUS_KYC_VERIFIED = "KYC Verified"
+
+VENDOR_LIFECYCLE_STATUS_BACKGROUND_CHECK_IN_PROGRESS = "Background Check In Progress"
+VENDOR_LIFECYCLE_STATUS_BACKGROUND_VERIFIED = "Background Verified"
+VENDOR_LIFECYCLE_STATUS_BACKGROUND_CHECK_FAILED = "Background Check Failed"
+VENDOR_LIFECYCLE_STATUS_REBACKGROUND_CHECK_IN_PROGRESS = "Re-Background Check In Progress"
+VENDOR_LIFECYCLE_STATUS_REBACKGROUND_CHECK_APPROVED = "Re-Background Check Approved"
+VENDOR_LIFECYCLE_STATUS_REBACKGROUND_CHECK_FAILED = "Re-Background Check Failed"
+
+VENDOR_LIFECYCLE_STATUS_COMPLIANCE_AUDIT_IN_PROGRESS = "Compliance Audit In Progress"
+VENDOR_LIFECYCLE_STATUS_AUDIT_VERIFIED = "Audit Verified"
+VENDOR_LIFECYCLE_STATUS_COMPLIANCE_AUDIT_FAILED = "Compliance Audit Failed"
+VENDOR_LIFECYCLE_STATUS_RECOMPLIANCE_AUDIT_IN_PROGRESS = "Re-Compliance Audit In Progress"
+VENDOR_LIFECYCLE_STATUS_RECOMPLIANCE_AUDIT_APPROVED = "Re-Compliance Audit Approved"
+VENDOR_LIFECYCLE_STATUS_RECOMPLIANCE_AUDIT_FAILED = "Re-Compliance Audit Failed"
+
+VENDOR_LIFECYCLE_STATUS_SAMPLING_IN_PROGRESS = "Sampling In Progress"
+VENDOR_LIFECYCLE_STATUS_SAMPLING_APPROVED = "Sampling Approved"
+VENDOR_LIFECYCLE_STATUS_SAMPLING_REJECTED = "Sampling Rejected"
+VENDOR_LIFECYCLE_STATUS_RESAMPLING_IN_PROGRESS = "Re-Sampling In Progress"
+VENDOR_LIFECYCLE_STATUS_RESAMPLING_APPROVED = "Re-Sampling Approved"
+VENDOR_LIFECYCLE_STATUS_RESAMPLING_REJECTED = "Re-Sampling Rejected"
+
+VENDOR_LIFECYCLE_STATUS_SIGN_OFF_IN_PROGRESS = "Sign Off In Progress"
+VENDOR_LIFECYCLE_STATUS_ACTIVE = "Active"
+
+# Set only by Vendor Deboarding Checklist.on_submit() (and restored by
+# tasks.auto_disable_expired_temporary_enables() once a temporary enable
+# window lapses) — the one reliable marker that a Supplier was actually
+# deboarded through this app's own process, not just disabled for some
+# unrelated reason (a mid-onboarding failure also sets disabled=1, with a
+# completely different vendor_lifecycle_status). Also re-used here as the
+# re-boarding pipeline's own "nothing has passed yet" baseline (see
+# resolve_current_stage_status below) — a re-boarding run starts from
+# exactly this state.
+VENDOR_LIFECYCLE_STATUS_DISABLED = "Disabled"
+
+# --- vendor_lifecycle_stage (coarse — "which pipeline is this vendor
+# currently in, at a glance") --------------------------------------------
+VENDOR_LIFECYCLE_STAGE_ONBOARDING = "Onboarding"
+VENDOR_LIFECYCLE_STAGE_ONBOARDING_FAILED = "Onboarding Failed"
+VENDOR_LIFECYCLE_STAGE_ONBOARDED = "Onboarded"
+VENDOR_LIFECYCLE_STAGE_DEBOARDING = "Deboarding"
+VENDOR_LIFECYCLE_STAGE_DEBOARDED = "Deboarded"
+VENDOR_LIFECYCLE_STAGE_REBOARDING = "Reboarding"
+VENDOR_LIFECYCLE_STAGE_REBOARDING_FAILED = "Reboarding Failed"
+VENDOR_LIFECYCLE_STAGE_REBOARDED = "Reboarded"
 
 # Every doctype that can be configured in Settings as the point where the
 # Supplier gets created, other than Vendor KYC itself.
@@ -75,6 +134,27 @@ def sync_onboarding_request_field(doc):
 		doc.onboarding_request = onboarding_request
 
 
+def require_kyc_unless_reboarding(doc):
+	"""kyc is hidden and only conditionally mandatory (mandatory_depends_on:
+	eval:!doc.is_reboarding) on all of SIBLING_DOCTYPES, so it can stay
+	blank and out of the way for a re-boarding-flagged document (which
+	gets its own kyc/vendor resolved from reboarding_request instead —
+	see each doctype's own _resolve_reboarding_kyc_and_vendor). But
+	mandatory_depends_on is desk-UI-only in this Frappe version — it never
+	blocks a save via the API — so the real enforcement for the ordinary
+	onboarding case (kyc genuinely required there) has to happen here.
+
+	A Renewal-flagged document (doc.is_renewal — e.g. a Compliance Audit
+	or Sign Off with Type = Renewal) has no kyc/reboarding_request anchor
+	at all by design; it stands alone, scoped only by vendor. getattr
+	with a default handles doctypes that don't have an is_renewal field
+	at all (Background Check today) the same as a plain False.
+
+	Call from validate() on any of SIBLING_DOCTYPES."""
+	if not doc.is_reboarding and not getattr(doc, "is_renewal", False) and not doc.kyc:
+		frappe.throw(frappe._("Vendor KYC is mandatory."), frappe.MandatoryError)
+
+
 def maybe_create_vendor(kyc):
 	"""Call from Vendor KYC's on_submit. Creates the Supplier if none exists
 	yet for this KYC, then backfills `vendor` onto any sibling stage
@@ -140,6 +220,7 @@ def _create_or_update_supplier(kyc):
 		})
 
 	supplier.vendor_lifecycle_status = VENDOR_LIFECYCLE_STATUS_KYC_VERIFIED
+	supplier.vendor_lifecycle_stage = VENDOR_LIFECYCLE_STAGE_ONBOARDING
 	# is_frozen is core ERPNext's own broader block — checked centrally on
 	# every transaction doctype with a party (Purchase Order, Invoice,
 	# Payment Entry, GL Entry, etc.), unlike the narrower on_hold/hold_type
@@ -456,10 +537,122 @@ def get_disable_reason_for_supplier(supplier):
 		return {"doctype": "Vendor Sign Off", "name": latest_sign_off.name}
 
 	for doctype, filters in DISABLE_REASON_SOURCES:
-		name = frappe.db.get_value(doctype, {"vendor": supplier, "docstatus": 1, **filters}, "name")
+		# is_reboarding: 0 — a re-boarding-flagged Failed/Rejected record
+		# never disables the Supplier in the first place (see each of
+		# these three doctypes' own _handle_failed_result /
+		# _handle_rejected_result), so it must never count as a "reason"
+		# here either, even though it shares the same vendor.
+		name = frappe.db.get_value(
+			doctype, {"vendor": supplier, "docstatus": 1, "is_reboarding": 0, **filters}, "name"
+		)
 		if name:
 			return {"doctype": doctype, "name": name}
 	return None
+
+
+def get_failed_stage_reason(*, kyc=None, reboarding_request=None):
+	"""Same shape and same DISABLE_REASON_SOURCES filters as
+	get_disable_reason_for_supplier above, but scoped to one specific
+	pipeline run (kyc, for onboarding; reboarding_request, for
+	re-boarding) instead of the vendor overall — this is what decides
+	whether the Supplier's coarse vendor_lifecycle_stage should currently
+	read "Onboarding Failed" / "Reboarding Failed". Exactly one of kyc /
+	reboarding_request must be given."""
+	if reboarding_request:
+		scope = {"reboarding_request": reboarding_request}
+	else:
+		# kyc alone isn't enough to scope to *onboarding* specifically — a
+		# re-boarding document carries this very same kyc (see each stage
+		# doctype's own _resolve_reboarding_kyc_and_vendor), so without
+		# this it would also wrongly match a re-boarding-flagged record
+		# for the same vendor.
+		scope = {"kyc": kyc, "is_reboarding": 0}
+
+	latest_sign_off = frappe.db.get_value(
+		"Vendor Sign Off", {**scope, "docstatus": 1}, ["name", "sign_off_failed"],
+		as_dict=True, order_by="creation desc",
+	)
+	if latest_sign_off and latest_sign_off.sign_off_failed:
+		return {"doctype": "Vendor Sign Off", "name": latest_sign_off.name}
+
+	for doctype, filters in DISABLE_REASON_SOURCES:
+		name = frappe.db.get_value(doctype, {**scope, "docstatus": 1, **filters}, "name")
+		if name:
+			return {"doctype": doctype, "name": name}
+	return None
+
+
+def resolve_current_stage_status(*, kyc=None, reboarding_request=None):
+	"""Walks backward through whichever of Sampling Evaluation / Compliance
+	Audit / Background Check most recently actually passed, for one
+	specific pipeline run (onboarding, scoped by kyc; re-boarding, scoped
+	by reboarding_request), and returns the matching vendor_lifecycle_status
+	label — falling back to a real baseline (KYC Verified for onboarding;
+	Disabled for re-boarding, since that's what a re-boarding run starts
+	from) if none of the three ever passed. Same walk-back Vendor Sign
+	Off's own cancel handler already did for onboarding, generalized here
+	so Background Check / Compliance Audit / Sampling Evaluation's own
+	cancel handlers can reuse it too, and so it also covers re-boarding."""
+	if reboarding_request:
+		scope = {"reboarding_request": reboarding_request}
+		sampling, audit, background, baseline = (
+			VENDOR_LIFECYCLE_STATUS_RESAMPLING_APPROVED,
+			VENDOR_LIFECYCLE_STATUS_RECOMPLIANCE_AUDIT_APPROVED,
+			VENDOR_LIFECYCLE_STATUS_REBACKGROUND_CHECK_APPROVED,
+			VENDOR_LIFECYCLE_STATUS_DISABLED,
+		)
+	else:
+		scope = {"kyc": kyc, "is_reboarding": 0}
+		sampling, audit, background, baseline = (
+			VENDOR_LIFECYCLE_STATUS_SAMPLING_APPROVED,
+			VENDOR_LIFECYCLE_STATUS_AUDIT_VERIFIED,
+			VENDOR_LIFECYCLE_STATUS_BACKGROUND_VERIFIED,
+			VENDOR_LIFECYCLE_STATUS_KYC_VERIFIED,
+		)
+
+	if frappe.db.exists("Vendor Sampling Evaluation", {**scope, "docstatus": 1, "evaluation_outcome": "Approved"}):
+		return sampling
+	if frappe.db.exists("Vendor Compliance Audit", {**scope, "docstatus": 1, "outcome": "Passed"}):
+		return audit
+	if frappe.db.exists("Vendor Background Check", {**scope, "docstatus": 1, "overall_status": "Passed"}):
+		return background
+	return baseline
+
+
+def revert_stage_result(vendor, *, kyc=None, reboarding_request=None):
+	"""Call after cancelling, or force-overriding, a Failed/Rejected
+	Background Check / Compliance Audit / Sampling Evaluation (or, for the
+	coarse field only, a Failed Vendor Sign Off) — reverts both the fine
+	vendor_lifecycle_status and the coarse vendor_lifecycle_stage's
+	"Onboarding Failed" / "Reboarding Failed" marker, but only if nothing
+	else in this same pipeline run is still Failed/Rejected.
+	get_failed_stage_reason() is the single source of truth both fields
+	defer to here, so they can never disagree about whether this pipeline
+	run currently has a live failure."""
+	if not vendor:
+		return
+	if get_failed_stage_reason(kyc=kyc, reboarding_request=reboarding_request):
+		return
+	frappe.db.set_value("Supplier", vendor, {
+		"vendor_lifecycle_status": resolve_current_stage_status(kyc=kyc, reboarding_request=reboarding_request),
+		"vendor_lifecycle_stage": VENDOR_LIFECYCLE_STAGE_REBOARDING if reboarding_request else VENDOR_LIFECYCLE_STAGE_ONBOARDING,
+	})
+
+
+def resolve_settled_active_stage(vendor):
+	"""Whether an active (non-disabled) vendor's coarse stage should read
+	"Onboarded" or "Reboarded" — used wherever a Supplier is being
+	reactivated by something other than a Sign Off itself (which already
+	knows which pipeline it belongs to), e.g. reverting a cancelled Vendor
+	Deboarding Checklist back to however this vendor was settled before
+	deboarding started. Reboarded takes precedence: a vendor with any
+	submitted, passed re-boarding Sign Off has, by definition, been
+	through re-boarding at least once."""
+	if frappe.db.exists(
+		"Vendor Sign Off", {"vendor": vendor, "docstatus": 1, "is_reboarding": 1, "sign_off_failed": 0}
+	):
+		return VENDOR_LIFECYCLE_STAGE_REBOARDED
+	return VENDOR_LIFECYCLE_STAGE_ONBOARDED
 
 
 def set_supplier_disable_reason_onload(doc, method=None):
@@ -574,6 +767,7 @@ DOCTYPE_EMAIL_SETTINGS_FIELD = {
 	"Vendor Sampling Evaluation": "onboarding_verification_emails",
 	"Vendor Sign Off": "onboarding_verification_emails",
 	"Vendor Deboarding Request": "deboarding_request_emails",
+	"Vendor Reboarding Request": "reboarding_request_emails",
 	"Vendor Deboarding Checklist": "deboarding_checklist_emails",
 	"Vendor Satisfaction Survey": "satisfaction_survey_emails",
 	"Vendor Support Ticket": "support_ticket_emails",
@@ -591,6 +785,10 @@ REMINDER_EMAIL_SETTINGS_FIELD = {
 	"Vendor Deboarding Clearance Certificate Follow-up": "deboarding_checklist_clearance_followup_emails",
 	"Vendor Satisfaction Survey Reminder": "satisfaction_survey_reminder_emails",
 	"Vendor Support Ticket Escalation": "support_ticket_escalation_emails",
+	"Compliance Audit Renewal Due": "compliance_audit_renewal_due_emails",
+	"Compliance Audit Renewal Draft Reminder": "compliance_audit_renewal_draft_reminder_emails",
+	"Sign Off Renewal Due": "signoff_renewal_due_emails",
+	"Sign Off Renewal Draft Reminder": "signoff_renewal_draft_reminder_emails",
 }
 
 

@@ -19,7 +19,6 @@
   "reference_result_method",
   "background_check_result_method",
   "audit_mandatory",
-  "compliance_audit_validity_months",
   "column_break_reference_minimum_rating",
   "reference_minimum_average_rating",
   "sampling_mandatory_overrides",
@@ -39,7 +38,12 @@
   "per_doctype_emails_section",
   "onboarding_request_emails",
   "onboarding_verification_emails",
+  "compliance_audit_renewal_due_emails",
+  "compliance_audit_renewal_draft_reminder_emails",
+  "signoff_renewal_due_emails",
+  "signoff_renewal_draft_reminder_emails",
   "deboarding_request_emails",
+  "reboarding_request_emails",
   "satisfaction_survey_emails",
   "satisfaction_survey_reminder_emails",
   "column_break_per_doctype_emails",
@@ -47,7 +51,22 @@
   "deboarding_checklist_task_reminder_emails",
   "deboarding_checklist_clearance_followup_emails",
   "support_ticket_emails",
-  "support_ticket_escalation_emails"
+  "support_ticket_escalation_emails",
+  "others_tab",
+  "reboarding_mandatory_section",
+  "reboarding_background_check_mandatory",
+  "reboarding_audit_mandatory",
+  "reboarding_sampling_mandatory",
+  "renewal_section",
+  "enable_compliance_audit_renewal",
+  "compliance_audit_validity_months",
+  "auto_create_compliance_audit_renewal",
+  "disable_vendor_on_compliance_audit_expiry",
+  "column_break_renewal",
+  "enable_signoff_renewal",
+  "auto_create_signoff_renewal",
+  "disable_vendor_on_contract_expiry",
+  "require_contract_validity"
  ],
  "fields": [
   {
@@ -137,7 +156,7 @@
   },
   {
    "default": "3",
-   "description": "Fallback pass/fail rating threshold (1–5).",
+   "description": "Fallback pass/fail rating threshold (1\u20135).",
    "fieldname": "reference_minimum_average_rating",
    "fieldtype": "Float",
    "label": "Minimum Average Rating (Reference)",
@@ -159,15 +178,6 @@
    "fieldname": "audit_mandatory",
    "fieldtype": "Check",
    "label": "Compliance Audit Mandatory"
-  },
-  {
-   "default": "12",
-   "description": "How many months a Passed audit stays valid.",
-   "fieldname": "compliance_audit_validity_months",
-   "fieldtype": "Int",
-   "label": "Compliance Audit Validity Period (Months)",
-   "non_negative": 1,
-   "reqd": 1
   },
   {
    "description": "Business Types that require Sampling Evaluation.",
@@ -292,6 +302,38 @@
   },
   {
    "default": "1",
+   "depends_on": "eval:doc.enable_vendor_lifecycle_emails && doc.onboarding_verification_emails",
+   "description": "Reminder before a vendor's Compliance Audit lapses.",
+   "fieldname": "compliance_audit_renewal_due_emails",
+   "fieldtype": "Check",
+   "label": "Compliance Audit Renewal Due Soon"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_vendor_lifecycle_emails && doc.onboarding_verification_emails",
+   "description": "Reminder for a Renewal draft still pending.",
+   "fieldname": "compliance_audit_renewal_draft_reminder_emails",
+   "fieldtype": "Check",
+   "label": "Compliance Audit Renewal Draft Reminder"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_vendor_lifecycle_emails && doc.onboarding_verification_emails",
+   "description": "Reminder before a vendor's contract lapses.",
+   "fieldname": "signoff_renewal_due_emails",
+   "fieldtype": "Check",
+   "label": "Sign Off Renewal Due Soon"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_vendor_lifecycle_emails && doc.onboarding_verification_emails",
+   "description": "Reminder for a Renewal draft still pending.",
+   "fieldname": "signoff_renewal_draft_reminder_emails",
+   "fieldtype": "Check",
+   "label": "Sign Off Renewal Draft Reminder"
+  },
+  {
+   "default": "1",
    "depends_on": "eval:doc.enable_vendor_lifecycle_emails",
    "fieldname": "deboarding_request_emails",
    "fieldtype": "Check",
@@ -353,6 +395,106 @@
    "fieldname": "support_ticket_escalation_emails",
    "fieldtype": "Check",
    "label": "Support Ticket Escalation"
+  },
+  {
+   "fieldname": "reboarding_request_emails",
+   "fieldtype": "Check",
+   "label": "Vendor Reboarding Request Emails",
+   "default": "1",
+   "depends_on": "eval:doc.enable_vendor_lifecycle_emails",
+   "description": "Independent on/off switch for this doctype's own emails, on top of the master switch above."
+  },
+  {
+   "fieldname": "others_tab",
+   "fieldtype": "Tab Break",
+   "label": "Others"
+  },
+  {
+   "fieldname": "reboarding_mandatory_section",
+   "fieldtype": "Section Break",
+   "label": "Reboarding"
+  },
+  {
+   "fieldname": "reboarding_background_check_mandatory",
+   "fieldtype": "Check",
+   "label": "Re-Background Check Mandatory",
+   "description": "Independent of onboarding's setting \u2014 for re-boarding only."
+  },
+  {
+   "fieldname": "reboarding_audit_mandatory",
+   "fieldtype": "Check",
+   "label": "Re-Compliance Audit Mandatory",
+   "description": "Independent of onboarding's setting \u2014 for re-boarding only."
+  },
+  {
+   "fieldname": "reboarding_sampling_mandatory",
+   "fieldtype": "Check",
+   "label": "Re-Sampling Mandatory",
+   "description": "If checked, follows onboarding's Business Type table. If unchecked, never mandatory for re-boarding."
+  },
+  {
+   "fieldname": "renewal_section",
+   "fieldtype": "Section Break",
+   "label": "Renewals"
+  },
+  {
+   "fieldname": "enable_compliance_audit_renewal",
+   "fieldtype": "Check",
+   "label": "Enable Compliance Audit Renewal",
+   "description": "Master switch for Compliance Audit Renewal. Unchecked: no new Renewal can be created."
+  },
+  {
+   "default": "12",
+   "description": "How many months a Passed audit stays valid.",
+   "fieldname": "compliance_audit_validity_months",
+   "fieldtype": "Int",
+   "label": "Compliance Audit Validity Period (Months)",
+   "non_negative": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "auto_create_compliance_audit_renewal",
+   "fieldtype": "Check",
+   "label": "Auto-Create Compliance Audit Renewal",
+   "depends_on": "eval:doc.enable_compliance_audit_renewal",
+   "description": "Auto-create the Renewal draft when due, and email the Manager."
+  },
+  {
+   "fieldname": "disable_vendor_on_compliance_audit_expiry",
+   "fieldtype": "Check",
+   "label": "Disable Vendor on Compliance Audit Expiry/Failure",
+   "depends_on": "eval:doc.enable_compliance_audit_renewal",
+   "description": "Off by default. If checked, a Failed or expired Renewal disables the vendor."
+  },
+  {
+   "fieldname": "column_break_renewal",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "enable_signoff_renewal",
+   "fieldtype": "Check",
+   "label": "Enable Sign Off Renewal",
+   "description": "Master switch for Sign Off Renewal. Unchecked: no new Renewal can be created."
+  },
+  {
+   "fieldname": "auto_create_signoff_renewal",
+   "fieldtype": "Check",
+   "label": "Auto-Create Sign Off Renewal",
+   "depends_on": "eval:doc.enable_signoff_renewal",
+   "description": "Auto-create the Renewal draft when due, and email the Manager."
+  },
+  {
+   "fieldname": "disable_vendor_on_contract_expiry",
+   "fieldtype": "Check",
+   "label": "Disable Vendor on Contract Expiry/Failure",
+   "depends_on": "eval:doc.enable_signoff_renewal",
+   "description": "Off by default. If checked, a Failed or expired Renewal disables the vendor."
+  },
+  {
+   "fieldname": "require_contract_validity",
+   "fieldtype": "Check",
+   "label": "Require Contract Validity",
+   "description": "If checked, Contract Validity is mandatory before submitting."
   }
  ],
  "grid_page_length": 50,
@@ -360,7 +502,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-09-05 21:00:00.000000",
+ "modified": "2026-09-21 15:30:00.000000",
  "modified_by": "Administrator",
  "module": "Vendor Lifecycle",
  "name": "Vendor Lifecycle Settings",

@@ -6,29 +6,40 @@ from frappe.model.document import Document
 
 from vendor_lifecycle.vendor_lifecycle.stage_sequencing import (
 	block_if_onboarding_request_stopped,
+	block_if_reboarding_completed,
 	enforce_sequential_cancellation,
 	enforce_sequential_creation,
 	force_override_stage,
 	require_no_active_document_for_kyc,
 )
 from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
+	VENDOR_LIFECYCLE_STAGE_ONBOARDING_FAILED,
+	VENDOR_LIFECYCLE_STAGE_REBOARDING_FAILED,
+	VENDOR_LIFECYCLE_STATUS_BACKGROUND_CHECK_FAILED,
+	VENDOR_LIFECYCLE_STATUS_BACKGROUND_CHECK_IN_PROGRESS,
+	VENDOR_LIFECYCLE_STATUS_BACKGROUND_VERIFIED,
+	VENDOR_LIFECYCLE_STATUS_REBACKGROUND_CHECK_APPROVED,
+	VENDOR_LIFECYCLE_STATUS_REBACKGROUND_CHECK_FAILED,
+	VENDOR_LIFECYCLE_STATUS_REBACKGROUND_CHECK_IN_PROGRESS,
 	get_disable_reason_for_supplier,
 	get_kyc_vendor_contact,
 	mark_vendor_status_in_progress,
+	require_kyc_unless_reboarding,
 	resolve_vendor_lifecycle_company_name,
+	revert_stage_result,
 	send_vendor_lifecycle_email,
 	sync_onboarding_request_field,
 	sync_vendor_field,
 )
 
-VENDOR_LIFECYCLE_STATUS_BACKGROUND_VERIFIED = "Background Verified"
-VENDOR_LIFECYCLE_STATUS_BACKGROUND_CHECK_IN_PROGRESS = "Background Check In Progress"
 DEFAULT_VENDOR_LIFECYCLE_PASSED_EMAIL_TEMPLATE = "Vendor Lifecycle Stage Passed"
 DEFAULT_VENDOR_LIFECYCLE_FAILED_EMAIL_TEMPLATE = "Vendor Lifecycle Stage Failed"
 
 
 class VendorBackgroundCheck(Document):
 	def before_insert(self):
+		self._resolve_reboarding_kyc_and_vendor()
+		block_if_reboarding_completed(self)
 		require_no_active_document_for_kyc(self)
 
 		if self.amended_from:
@@ -47,6 +58,18 @@ class VendorBackgroundCheck(Document):
 			self.reference_summary = []
 			self.outcome = "Needs Review"
 
+	def _resolve_reboarding_kyc_and_vendor(self):
+		# Same pattern as Vendor Reboarding Request's own field resolution
+		# — kyc/vendor stay mandatory and shown, just auto-filled from the
+		# Reboarding Request instead of picked by hand, for a re-boarding
+		# run.
+		if not self.is_reboarding or not self.reboarding_request:
+			return
+		if not self.kyc:
+			self.kyc = frappe.db.get_value("Vendor Reboarding Request", self.reboarding_request, "original_kyc")
+		if not self.vendor:
+			self.vendor = frappe.db.get_value("Vendor Reboarding Request", self.reboarding_request, "vendor")
+
 	@frappe.whitelist()
 	def load_compliance_checks_from_template(self):
 		if not self.compliance_check_template:
@@ -64,8 +87,14 @@ class VendorBackgroundCheck(Document):
 		self._compute_overall_status()
 		sync_vendor_field(self)
 		sync_onboarding_request_field(self)
+		require_kyc_unless_reboarding(self)
 		enforce_sequential_creation(self)
-		mark_vendor_status_in_progress(self, VENDOR_LIFECYCLE_STATUS_BACKGROUND_CHECK_IN_PROGRESS)
+		mark_vendor_status_in_progress(
+			self,
+			VENDOR_LIFECYCLE_STATUS_REBACKGROUND_CHECK_IN_PROGRESS
+			if self.is_reboarding
+			else VENDOR_LIFECYCLE_STATUS_BACKGROUND_CHECK_IN_PROGRESS,
+		)
 
 	def _clear_unused_auditor_field(self):
 		# Only one of internal Conducted By / external agency ever applies at
@@ -373,7 +402,12 @@ class VendorBackgroundCheck(Document):
 			return
 
 		if self.vendor and self.overall_status == "Passed":
-			frappe.db.set_value("Supplier", self.vendor, "vendor_lifecycle_status", VENDOR_LIFECYCLE_STATUS_BACKGROUND_VERIFIED)
+			status = (
+				VENDOR_LIFECYCLE_STATUS_REBACKGROUND_CHECK_APPROVED
+				if self.is_reboarding
+				else VENDOR_LIFECYCLE_STATUS_BACKGROUND_VERIFIED
+			)
+			frappe.db.set_value("Supplier", self.vendor, "vendor_lifecycle_status", status)
 		self._notify_outcome(DEFAULT_VENDOR_LIFECYCLE_PASSED_EMAIL_TEMPLATE)
 
 	def _notify_outcome(self, template_name):
@@ -385,7 +419,10 @@ class VendorBackgroundCheck(Document):
 				"company_name": resolve_vendor_lifecycle_company_name(),
 				"stage_name": "Background Check",
 			}
-			if template_name == DEFAULT_VENDOR_LIFECYCLE_PASSED_EMAIL_TEMPLATE:
+			# Re-boarding doesn't enforce a stage order (see
+			# stage_sequencing.enforce_sequential_creation's is_reboarding
+			# branch), so "your next stage is X" doesn't hold for it.
+			if template_name == DEFAULT_VENDOR_LIFECYCLE_PASSED_EMAIL_TEMPLATE and not self.is_reboarding:
 				context["next_stage"] = "Compliance Audit"
 			send_vendor_lifecycle_email(
 				doctype=self.doctype,
@@ -429,9 +466,16 @@ class VendorBackgroundCheck(Document):
 		# after the override.
 		if self.overall_status != "Failed" or not self.vendor:
 			return
+		if self.is_reboarding:
+			# No disable was ever touched for a re-boarding-flagged Failed
+			# result (see _handle_failed_result below) — only the status
+			# labels need reverting here.
+			revert_stage_result(self.vendor, reboarding_request=self.reboarding_request)
+			return
 		reason = get_disable_reason_for_supplier(self.vendor)
 		if not reason or reason == {"doctype": self.doctype, "name": self.name}:
 			frappe.db.set_value("Supplier", self.vendor, "disabled", 0)
+		revert_stage_result(self.vendor, kyc=self.kyc)
 
 	def _handle_failed_result(self):
 		# The Supplier is always created at Vendor KYC submission, so it
@@ -439,8 +483,24 @@ class VendorBackgroundCheck(Document):
 		# this just disables it. enforce_sequential_creation() already
 		# blocks the next stage from starting without a "Passed" Background
 		# Check, so no separate stage-blocking logic is needed here.
-		if self.vendor:
-			frappe.db.set_value("Supplier", self.vendor, "disabled", 1)
+		if not self.vendor:
+			return
+		if self.is_reboarding:
+			# Deliberately does NOT touch disabled/is_frozen — a
+			# re-boarding vendor is already disabled from deboarding, and
+			# stays that way regardless of any one re-boarding stage's own
+			# result; only a passing re-boarding Sign Off reactivates it.
+			# This just records the result.
+			frappe.db.set_value("Supplier", self.vendor, {
+				"vendor_lifecycle_status": VENDOR_LIFECYCLE_STATUS_REBACKGROUND_CHECK_FAILED,
+				"vendor_lifecycle_stage": VENDOR_LIFECYCLE_STAGE_REBOARDING_FAILED,
+			})
+			return
+		frappe.db.set_value("Supplier", self.vendor, {
+			"disabled": 1,
+			"vendor_lifecycle_status": VENDOR_LIFECYCLE_STATUS_BACKGROUND_CHECK_FAILED,
+			"vendor_lifecycle_stage": VENDOR_LIFECYCLE_STAGE_ONBOARDING_FAILED,
+		})
 
 	@frappe.whitelist()
 	def force_override(self, reason):

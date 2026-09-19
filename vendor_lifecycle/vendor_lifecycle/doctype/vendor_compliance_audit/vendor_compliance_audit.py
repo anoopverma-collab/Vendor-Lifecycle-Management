@@ -8,31 +8,76 @@ from frappe.model.document import Document
 
 from vendor_lifecycle.vendor_lifecycle.stage_sequencing import (
 	block_if_onboarding_request_stopped,
+	block_if_reboarding_completed,
 	enforce_sequential_cancellation,
 	enforce_sequential_creation,
 	force_override_stage,
 	require_no_active_document_for_kyc,
 )
 from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
+	VENDOR_LIFECYCLE_STAGE_ONBOARDING_FAILED,
+	VENDOR_LIFECYCLE_STAGE_REBOARDING_FAILED,
+	VENDOR_LIFECYCLE_STATUS_AUDIT_VERIFIED,
+	VENDOR_LIFECYCLE_STATUS_COMPLIANCE_AUDIT_FAILED,
+	VENDOR_LIFECYCLE_STATUS_COMPLIANCE_AUDIT_IN_PROGRESS,
+	VENDOR_LIFECYCLE_STATUS_RECOMPLIANCE_AUDIT_APPROVED,
+	VENDOR_LIFECYCLE_STATUS_RECOMPLIANCE_AUDIT_FAILED,
+	VENDOR_LIFECYCLE_STATUS_RECOMPLIANCE_AUDIT_IN_PROGRESS,
 	get_disable_reason_for_supplier,
 	get_kyc_vendor_contact,
 	mark_vendor_status_in_progress,
+	require_kyc_unless_reboarding,
 	resolve_vendor_lifecycle_company_name,
+	revert_stage_result,
 	send_vendor_lifecycle_email,
 	sync_onboarding_request_field,
 	sync_vendor_field,
 )
 
+DEFAULT_COMPLIANCE_AUDIT_RENEWAL_DUE_EMAIL_TEMPLATE = "Compliance Audit Renewal Due"
+DEFAULT_COMPLIANCE_AUDIT_RENEWAL_DRAFT_REMINDER_EMAIL_TEMPLATE = "Compliance Audit Renewal Draft Reminder"
+
 DEFAULT_VENDOR_LIFECYCLE_PASSED_EMAIL_TEMPLATE = "Vendor Lifecycle Stage Passed"
 DEFAULT_VENDOR_LIFECYCLE_FAILED_EMAIL_TEMPLATE = "Vendor Lifecycle Stage Failed"
-
-VENDOR_LIFECYCLE_STATUS_AUDIT_VERIFIED = "Audit Verified"
-VENDOR_LIFECYCLE_STATUS_COMPLIANCE_AUDIT_IN_PROGRESS = "Compliance Audit In Progress"
 
 
 class VendorComplianceAudit(Document):
 	def before_insert(self):
+		self._derive_type_flags()
+		self._require_renewal_enabled()
+		self._resolve_reboarding_kyc_and_vendor()
+		block_if_reboarding_completed(self)
 		require_no_active_document_for_kyc(self)
+
+	def _derive_type_flags(self):
+		# audit_type is the one field the user actually picks; is_reboarding
+		# and is_renewal stay as plain, hidden, auto-computed booleans so
+		# every existing is_reboarding-keyed check elsewhere in the app
+		# (sequencing, disable/enable, reports, dashboards) keeps working
+		# completely unchanged — Renewal is new, additive logic layered on
+		# top of that, not a rework of it.
+		self.is_reboarding = 1 if self.audit_type == "Reboarding" else 0
+		self.is_renewal = 1 if self.audit_type == "Renewal" else 0
+
+	def _require_renewal_enabled(self):
+		if not self.is_renewal:
+			return
+		if not frappe.db.get_single_value("Vendor Lifecycle Settings", "enable_compliance_audit_renewal"):
+			frappe.throw(
+				frappe._("Compliance Audit Renewal is disabled in Vendor Lifecycle Settings.")
+			)
+
+	def _resolve_reboarding_kyc_and_vendor(self):
+		# Same pattern as Vendor Reboarding Request's own field resolution
+		# — kyc/vendor stay mandatory and shown, just auto-filled from the
+		# Reboarding Request instead of picked by hand, for a re-boarding
+		# run.
+		if not self.is_reboarding or not self.reboarding_request:
+			return
+		if not self.kyc:
+			self.kyc = frappe.db.get_value("Vendor Reboarding Request", self.reboarding_request, "original_kyc")
+		if not self.vendor:
+			self.vendor = frappe.db.get_value("Vendor Reboarding Request", self.reboarding_request, "vendor")
 
 	@frappe.whitelist()
 	def load_checklist_from_template(self):
@@ -71,6 +116,7 @@ class VendorComplianceAudit(Document):
 			self.append("insurance_certificates", {"insurance_type": row.insurance_type})
 
 	def validate(self):
+		self._derive_type_flags()
 		block_if_onboarding_request_stopped(self)
 		self._clear_unused_auditor_field()
 		self._clear_facility_area_if_not_applicable()
@@ -82,8 +128,19 @@ class VendorComplianceAudit(Document):
 		self._warn_on_expired_documents()
 		sync_vendor_field(self)
 		sync_onboarding_request_field(self)
+		require_kyc_unless_reboarding(self)
 		enforce_sequential_creation(self)
-		mark_vendor_status_in_progress(self, VENDOR_LIFECYCLE_STATUS_COMPLIANCE_AUDIT_IN_PROGRESS)
+		# A Renewal deliberately never touches the Supplier's status field
+		# at all — see on_submit()'s own Renewal branch for the only two
+		# things a Renewal is allowed to affect (disabled, valid_until).
+		if self.is_renewal:
+			return
+		mark_vendor_status_in_progress(
+			self,
+			VENDOR_LIFECYCLE_STATUS_RECOMPLIANCE_AUDIT_IN_PROGRESS
+			if self.is_reboarding
+			else VENDOR_LIFECYCLE_STATUS_COMPLIANCE_AUDIT_IN_PROGRESS,
+		)
 
 	def _clear_valid_scope_if_global(self):
 		# Runs on every save, not just the client-side toggle — a stale
@@ -572,37 +629,81 @@ class VendorComplianceAudit(Document):
 				)
 
 	def on_submit(self):
+		if self.is_renewal:
+			self._handle_renewal_result()
+			return
+
 		if self.outcome == "Failed":
 			self._handle_failed_result()
 			self._notify_outcome(DEFAULT_VENDOR_LIFECYCLE_FAILED_EMAIL_TEMPLATE)
 			return
 
 		if self.vendor and self.outcome == "Passed":
-			frappe.db.set_value("Supplier", self.vendor, "vendor_lifecycle_status", VENDOR_LIFECYCLE_STATUS_AUDIT_VERIFIED)
+			status = (
+				VENDOR_LIFECYCLE_STATUS_RECOMPLIANCE_AUDIT_APPROVED
+				if self.is_reboarding
+				else VENDOR_LIFECYCLE_STATUS_AUDIT_VERIFIED
+			)
+			frappe.db.set_value("Supplier", self.vendor, "vendor_lifecycle_status", status)
 			months = frappe.db.get_single_value("Vendor Lifecycle Settings", "compliance_audit_validity_months") or 0
-			self.db_set("valid_until", frappe.utils.add_months(self.audit_date, months))
-			# Deliberately manual/reporting-only for now (see the "Vendors Due
-			# for Re-Audit" report) — nothing here reacts when valid_until
-			# passes. A future opt-in Settings toggle (e.g. "Auto-flag
-			# Suppliers with Expired Compliance Audit") could flip
-			# vendor_lifecycle_status once a vendor's latest Passed audit
-			# expires with no newer one — the same "hard veto" enforcement
-			# style already used for a failed Background Check
-			# (_handle_failed_result below) — but that's a real behavior
-			# change a deployment should opt into, not something to turn on
-			# silently by building it now.
+			valid_until = frappe.utils.add_months(self.audit_date, months)
+			self.db_set("valid_until", valid_until)
+			frappe.db.set_value("Supplier", self.vendor, "compliance_audit_valid_until", valid_until)
 		self._notify_outcome(DEFAULT_VENDOR_LIFECYCLE_PASSED_EMAIL_TEMPLATE)
+
+	def _handle_renewal_result(self):
+		# A Renewal never touches vendor_lifecycle_status/stage — by
+		# explicit product decision, it's purely: keep the Supplier's own
+		# compliance_audit_valid_until in sync, and — only if the relevant
+		# Settings checkbox says so — disable the vendor on a Failed
+		# result. A Passed Renewal always clears that same disable, if it
+		# was this specific reason keeping the vendor disabled.
+		if not self.vendor:
+			return
+		settings = frappe.get_single("Vendor Lifecycle Settings")
+		if self.outcome == "Passed":
+			months = frappe.db.get_single_value("Vendor Lifecycle Settings", "compliance_audit_validity_months") or 0
+			valid_until = frappe.utils.add_months(self.audit_date, months)
+			self.db_set("valid_until", valid_until)
+			frappe.db.set_value("Supplier", self.vendor, "compliance_audit_valid_until", valid_until)
+			if settings.get("disable_vendor_on_compliance_audit_expiry"):
+				reason = get_disable_reason_for_supplier(self.vendor)
+				if not reason or reason == {"doctype": self.doctype, "name": self.name}:
+					frappe.db.set_value("Supplier", self.vendor, "disabled", 0)
+			self._notify_outcome(DEFAULT_VENDOR_LIFECYCLE_PASSED_EMAIL_TEMPLATE)
+			return
+
+		if self.outcome == "Failed" and settings.get("disable_vendor_on_compliance_audit_expiry"):
+			frappe.db.set_value("Supplier", self.vendor, "disabled", 1)
+		self._notify_outcome(DEFAULT_VENDOR_LIFECYCLE_FAILED_EMAIL_TEMPLATE)
 
 	def _notify_outcome(self, template_name):
 		try:
-			contact = get_kyc_vendor_contact(self.kyc) if self.kyc else {}
+			# A Renewal has no kyc of its own (see _resolve_reboarding_kyc_
+			# and_vendor's onboarding/re-boarding-only scope) — its own
+			# original KYC still holds the same firm/contact details, and is
+			# purely a read-only contact-info source here, nothing else.
+			kyc_for_contact = self.kyc or (
+				frappe.db.get_value("Vendor KYC", {"supplier": self.vendor, "docstatus": 1}, "name")
+				if self.is_renewal and self.vendor
+				else None
+			)
+			contact = get_kyc_vendor_contact(kyc_for_contact) if kyc_for_contact else {}
 			context = {
 				"firm_name": contact.get("firm_name"),
 				"contact_person_name": contact.get("contact_person_name"),
 				"company_name": resolve_vendor_lifecycle_company_name(),
 				"stage_name": "Compliance Audit",
 			}
-			if template_name == DEFAULT_VENDOR_LIFECYCLE_PASSED_EMAIL_TEMPLATE:
+			# Neither re-boarding nor a Renewal enforce a stage order (see
+			# stage_sequencing.enforce_sequential_creation's is_reboarding
+			# and is_renewal branches), so "your next stage is X" doesn't
+			# hold for either.
+			if (
+				template_name == DEFAULT_VENDOR_LIFECYCLE_PASSED_EMAIL_TEMPLATE
+				and not self.is_reboarding
+				and not self.is_renewal
+			):
 				context["next_stage"] = "Sampling Evaluation"
 			send_vendor_lifecycle_email(
 				doctype=self.doctype,
@@ -624,8 +725,22 @@ class VendorComplianceAudit(Document):
 		# get_available_stages() already hard-stops offering the next stage
 		# once this Audit has Failed, so no separate stage-blocking logic is
 		# needed here.
-		if self.vendor:
-			frappe.db.set_value("Supplier", self.vendor, "disabled", 1)
+		if not self.vendor:
+			return
+		if self.is_reboarding:
+			# Deliberately does NOT touch disabled/is_frozen — see Vendor
+			# Background Check's own _handle_failed_result for the full
+			# reasoning (same rule, same doctype shape).
+			frappe.db.set_value("Supplier", self.vendor, {
+				"vendor_lifecycle_status": VENDOR_LIFECYCLE_STATUS_RECOMPLIANCE_AUDIT_FAILED,
+				"vendor_lifecycle_stage": VENDOR_LIFECYCLE_STAGE_REBOARDING_FAILED,
+			})
+			return
+		frappe.db.set_value("Supplier", self.vendor, {
+			"disabled": 1,
+			"vendor_lifecycle_status": VENDOR_LIFECYCLE_STATUS_COMPLIANCE_AUDIT_FAILED,
+			"vendor_lifecycle_stage": VENDOR_LIFECYCLE_STAGE_ONBOARDING_FAILED,
+		})
 
 	@frappe.whitelist()
 	def force_override(self, reason):
@@ -641,7 +756,66 @@ class VendorComplianceAudit(Document):
 	def on_cancel(self):
 		block_if_onboarding_request_stopped(self)
 		enforce_sequential_cancellation(self)
+		# Unconditional, regardless of Type — compliance_audit_valid_until
+		# is described as tracking "the most recent passed and submitted
+		# Compliance Audit" full stop, not "...of Renewal Type only", so
+		# cancelling ANY passed one (Onboarding, Reboarding, or Renewal)
+		# rolls the Supplier's own mirror of it back to whichever earlier
+		# Passed audit (of any Type) actually holds now.
+		previous_valid_until = self._revert_compliance_audit_valid_until_if_cancelled_pass()
+		if self.is_renewal:
+			self._revert_renewal_result(previous_valid_until)
+			return
 		self._revert_disable_if_this_was_the_failed_one()
+
+	def _revert_compliance_audit_valid_until_if_cancelled_pass(self):
+		if self.outcome != "Passed" or not self.vendor:
+			return None
+		previous_valid_until = frappe.db.get_value(
+			"Vendor Compliance Audit",
+			{"vendor": self.vendor, "docstatus": 1, "outcome": "Passed", "name": ["!=", self.name]},
+			"valid_until",
+			order_by="audit_date desc",
+		)
+		frappe.db.set_value("Supplier", self.vendor, "compliance_audit_valid_until", previous_valid_until)
+		return previous_valid_until
+
+	def _revert_renewal_result(self, previous_valid_until):
+		# Mirrors _revert_disable_if_this_was_the_failed_one below, but for
+		# a Renewal: disable/re-enable is gated entirely by the Settings
+		# checkbox (never unconditional, unlike onboarding/re-boarding).
+		# The valid_until roll-back itself already happened, unconditionally,
+		# in on_cancel above — this only decides the disable consequence of
+		# whatever that roll-back landed on.
+		if not self.vendor:
+			return
+		settings = frappe.get_single("Vendor Lifecycle Settings")
+		disable_on_expiry = bool(settings.get("disable_vendor_on_compliance_audit_expiry"))
+
+		if self.outcome == "Passed":
+			if disable_on_expiry:
+				expired = not previous_valid_until or frappe.utils.getdate(previous_valid_until) < frappe.utils.getdate(
+					frappe.utils.today()
+				)
+				if expired:
+					frappe.db.set_value("Supplier", self.vendor, "disabled", 1)
+			return
+
+		if self.outcome == "Failed" and disable_on_expiry:
+			reason = get_disable_reason_for_supplier(self.vendor)
+			if reason and reason != {"doctype": self.doctype, "name": self.name}:
+				return
+			# A Failed Renewal never sets valid_until (only a Passed one
+			# does — see above), so previous_valid_until is always None
+			# here; the Supplier's own current compliance_audit_valid_until
+			# is the only real record of whether it's actually still
+			# expired.
+			current_valid_until = frappe.db.get_value("Supplier", self.vendor, "compliance_audit_valid_until")
+			expired = not current_valid_until or frappe.utils.getdate(current_valid_until) < frappe.utils.getdate(
+				frappe.utils.today()
+			)
+			if not expired:
+				frappe.db.set_value("Supplier", self.vendor, "disabled", 0)
 
 	def _revert_disable_if_this_was_the_failed_one(self):
 		# Same treatment as Vendor Background Check's own
@@ -654,6 +828,10 @@ class VendorComplianceAudit(Document):
 		# already-overridden Audit.
 		if self.outcome != "Failed" or not self.vendor:
 			return
+		if self.is_reboarding:
+			revert_stage_result(self.vendor, reboarding_request=self.reboarding_request)
+			return
 		reason = get_disable_reason_for_supplier(self.vendor)
 		if not reason or reason == {"doctype": self.doctype, "name": self.name}:
 			frappe.db.set_value("Supplier", self.vendor, "disabled", 0)
+		revert_stage_result(self.vendor, kyc=self.kyc)
