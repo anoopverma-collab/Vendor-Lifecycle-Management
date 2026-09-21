@@ -10,6 +10,7 @@ from vendor_lifecycle.vendor_lifecycle.stage_sequencing import (
 	enforce_sequential_creation,
 	is_sampling_mandatory,
 	is_sampling_mandatory_for_reboarding,
+	require_active_supplier_for_renewal,
 	stage_requirement_satisfied,
 )
 from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
@@ -111,6 +112,7 @@ class VendorSignOff(Document):
 	def before_insert(self):
 		self._derive_type_flags()
 		self._require_renewal_enabled()
+		require_active_supplier_for_renewal(self)
 		self._resolve_reboarding_kyc_and_vendor()
 		self._require_no_active_signoff_unless_failed()
 		# Not currently consumed anywhere (the Web Form that used this was
@@ -203,6 +205,7 @@ class VendorSignOff(Document):
 		)
 
 	def before_submit(self):
+		require_active_supplier_for_renewal(self)
 		if self.sign_off_failed:
 			# A failed Sign-off is a terminal outcome, not a normal
 			# completion — none of the usual "other stages passed" /

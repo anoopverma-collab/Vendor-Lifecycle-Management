@@ -134,12 +134,11 @@
    "read_only": 1
   },
   {
-   "description": "Auto-set when Result is Passed; blank otherwise.",
+   "description": "Optional. If set, this exact date goes to the Supplier once Passed. If left blank, the Supplier instead gets Audit Date + the validity period from Settings. Failed never updates the Supplier either way.",
    "fieldname": "valid_until",
    "fieldtype": "Date",
    "in_list_view": 1,
-   "label": "Valid Until",
-   "read_only": 1
+   "label": "Valid Until"
   },
   {
    "fieldname": "section_break_audit_team",

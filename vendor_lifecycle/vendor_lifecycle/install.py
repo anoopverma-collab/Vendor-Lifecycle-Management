@@ -152,16 +152,9 @@ def after_install():
 
 def after_migrate():
 	sync_standard_files()
-	backfill_kyc_billing_currency()
-	backfill_vendor_lifecycle_stage()
-	backfill_compliance_audit_type()
 	backfill_supplier_compliance_audit_valid_until()
-	backfill_signoff_type()
 	backfill_supplier_contract_valid_until()
-	backfill_sampling_type()
-	backfill_team_size_buckets()
 	backfill_settings_defaults()
-	backfill_last_satisfaction_survey_date()
 	rename_ndc_terminology()
 	migrate_onboarding_request_to_submittable()
 	remove_stale_setting("request_edit_override_role")
@@ -178,7 +171,6 @@ def after_migrate():
 	backfill_result_method_resolved()
 	rename_estimated_monthly_capacity()
 	migrate_facility_applicable_to_yes_no()
-	backfill_license_insurance_masters()
 	migrate_signoff_email_settings_to_vendor_lifecycle()
 	remove_stale_setting("esign_provider")
 	remove_stale_setting("supplier_unfreeze_role")
@@ -1344,136 +1336,6 @@ SETTINGS_FIELD_DEFAULTS = {
 }
 
 
-TEAM_SIZE_BUCKETS = ("0-50", "51-100", "101-150", "150+")
-
-
-def _team_size_bucket_for(raw_value):
-	try:
-		count = int(raw_value)
-	except (TypeError, ValueError):
-		return None
-	if count <= 50:
-		return "0-50"
-	if count <= 100:
-		return "51-100"
-	if count <= 150:
-		return "101-150"
-	return "150+"
-
-
-def backfill_team_size_buckets():
-	# team_size on both Vendor Onboarding Request and Vendor KYC was
-	# converted from a plain number field to a Select of 4 fixed size
-	# ranges — any value already stored as a raw number (e.g. 11, 1200)
-	# no longer matches any of those options and would show as an
-	# unrecognized/blank value on an existing record. Maps each one into
-	# its matching bucket, once; a value already one of the 4 valid
-	# bucket strings (from a fresh save after this change) is left alone,
-	# which is also what keeps this safe to run on every migrate.
-	for doctype in ("Vendor Onboarding Request", "Vendor KYC"):
-		rows = frappe.get_all(doctype, fields=["name", "team_size"], filters={"team_size": ["is", "set"]})
-		for row in rows:
-			if row.team_size in TEAM_SIZE_BUCKETS:
-				continue
-			bucket = _team_size_bucket_for(row.team_size)
-			if bucket:
-				frappe.db.set_value(doctype, row.name, "team_size", bucket)
-
-
-def backfill_kyc_billing_currency():
-	# billing_currency became mandatory on Vendor KYC without a backfill for
-	# already-existing records at the time — confirmed on two separate
-	# sites to leave old records permanently stuck (can't be saved again
-	# through any path, including an internal re-save, until someone fills
-	# it in by hand) since Frappe doesn't retroactively validate a newly-
-	# mandatory field against rows that already existed. Fixing that gap
-	# here, following the same "backfill every existing row" rule used
-	# throughout this file (see e.g. backfill_missing_compliance_check_
-	# template) — a record found once should never get stuck again.
-	#
-	# Prefers the linked Supplier's own default_currency (set by staff for
-	# that specific vendor) over the site's own Global Defaults currency,
-	# since that's the more specific, more likely-correct value when it's
-	# actually set.
-	affected = frappe.get_all(
-		"Vendor KYC", filters={"billing_currency": ["in", ["", None]]}, fields=["name", "supplier"]
-	)
-	if not affected:
-		return
-
-	site_default_currency = frappe.db.get_single_value("Global Defaults", "default_currency")
-	for row in affected:
-		currency = None
-		if row.supplier:
-			currency = frappe.db.get_value("Supplier", row.supplier, "default_currency")
-		currency = currency or site_default_currency
-		if not currency:
-			# No currency configured anywhere on the site to fall back to —
-			# nothing safe to backfill with; leave it for a human to set.
-			continue
-		frappe.db.set_value("Vendor KYC", row.name, "billing_currency", currency)
-
-
-def backfill_vendor_lifecycle_stage():
-	# vendor_lifecycle_stage is a new, coarser companion to
-	# vendor_lifecycle_status (the fine-grained detail) — every Supplier
-	# that already had the fine status before this new field existed needs
-	# its coarse stage worked out from that, once, the same "backfill
-	# every existing row" rule as backfill_kyc_billing_currency above. Only
-	# ever fills in a currently-blank vendor_lifecycle_stage, so this is
-	# safe to run on every migrate — a real value here is never clobbered.
-	from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
-		VENDOR_LIFECYCLE_STAGE_DEBOARDED,
-		VENDOR_LIFECYCLE_STAGE_ONBOARDING,
-		resolve_settled_active_stage,
-	)
-
-	onboarding_in_flight_statuses = {
-		"KYC Verified",
-		"Background Check In Progress", "Background Verified", "Background Check Failed",
-		"Compliance Audit In Progress", "Audit Verified", "Compliance Audit Failed",
-		"Sampling In Progress", "Sampling Approved", "Sampling Rejected",
-		"Sign Off In Progress",
-	}
-	deboarded_statuses = {"Disabled", "Temporarily Enabled", "Deboarding Initiated"}
-
-	affected = frappe.get_all(
-		"Supplier",
-		filters={"vendor_lifecycle_status": ["is", "set"], "vendor_lifecycle_stage": ["is", "not set"]},
-		fields=["name", "vendor_lifecycle_status"],
-	)
-	for row in affected:
-		status = row.vendor_lifecycle_status
-		if status in onboarding_in_flight_statuses:
-			stage = VENDOR_LIFECYCLE_STAGE_ONBOARDING
-		elif status == "Active":
-			stage = resolve_settled_active_stage(row.name)
-		elif status in deboarded_statuses:
-			stage = VENDOR_LIFECYCLE_STAGE_DEBOARDED
-		else:
-			# Unrecognized/legacy value ("Signed" — never actually
-			# assigned anywhere in this app's own code) — leave blank
-			# rather than guess.
-			continue
-		frappe.db.set_value("Supplier", row.name, "vendor_lifecycle_stage", stage, update_modified=False)
-
-
-def backfill_compliance_audit_type():
-	# audit_type is new — every existing Vendor Compliance Audit only ever
-	# had the plain is_reboarding boolean, so it's worked out from that,
-	# once. Only ever fills in a currently-blank audit_type, same
-	# "backfill every existing row, never clobber a real value" rule as
-	# backfill_vendor_lifecycle_stage above. Direct SQL — a pure data
-	# backfill of a non-validated field, no need to load full documents.
-	frappe.db.sql(
-		"""
-		update `tabVendor Compliance Audit`
-		set audit_type = if(is_reboarding, 'Reboarding', 'Onboarding')
-		where audit_type is null or audit_type = ''
-		"""
-	)
-
-
 def backfill_supplier_compliance_audit_valid_until():
 	# New Supplier-level mirror of "when does this vendor's Compliance
 	# Audit currently expire" — every Supplier that already has a Passed,
@@ -1502,36 +1364,6 @@ def backfill_supplier_compliance_audit_valid_until():
 			frappe.db.set_value(
 				"Supplier", row.vendor, "compliance_audit_valid_until", row.valid_until, update_modified=False
 			)
-
-
-def backfill_signoff_type():
-	# signoff_type is new — every existing Vendor Sign Off only ever had
-	# the plain is_reboarding boolean, so it's worked out from that, once
-	# — same "backfill every existing row, never clobber a real value"
-	# rule as backfill_compliance_audit_type above.
-	frappe.db.sql(
-		"""
-		update `tabVendor Sign Off`
-		set signoff_type = if(is_reboarding, 'Reboarding', 'Onboarding')
-		where signoff_type is null or signoff_type = ''
-		"""
-	)
-
-
-def backfill_sampling_type():
-	# sampling_type is new — every existing Vendor Sampling Evaluation only
-	# ever had the plain is_reboarding boolean, so it's worked out from
-	# that, once — same "backfill every existing row, never clobber a real
-	# value" rule as backfill_compliance_audit_type above. Ad-hoc is never
-	# backfilled here — it didn't exist as a concept before this field did,
-	# so every pre-existing row was necessarily Onboarding or Reboarding.
-	frappe.db.sql(
-		"""
-		update `tabVendor Sampling Evaluation`
-		set sampling_type = if(is_reboarding, 'Reboarding', 'Onboarding')
-		where sampling_type is null or sampling_type = ''
-		"""
-	)
 
 
 def backfill_supplier_contract_valid_until():
@@ -1630,29 +1462,6 @@ def backfill_default_satisfaction_rating_template():
 		frappe.db.set_single_value(
 			"Vendor Lifecycle Settings", "default_rating_template", DEFAULT_SATISFACTION_RATING_TEMPLATE
 		)
-
-
-def backfill_last_satisfaction_survey_date():
-	# Supplier.last_satisfaction_survey_date only starts getting kept in
-	# sync going forward (see VendorSatisfactionSurvey.after_insert) — this
-	# fills in real history for surveys that already existed before that
-	# field did, so a vendor surveyed last week doesn't look never-surveyed
-	# to the scheduler and get an unwanted extra one today. Only fills in
-	# where still blank — never overwrites a value the app itself set.
-	rows = frappe.db.sql(
-		"""
-		select vendor, max(survey_date) as last_date
-		from `tabVendor Satisfaction Survey`
-		where vendor is not null and vendor != ''
-		group by vendor
-		""",
-		as_dict=True,
-	)
-	for row in rows:
-		if not frappe.db.exists("Supplier", row.vendor):
-			continue
-		if not frappe.db.get_value("Supplier", row.vendor, "last_satisfaction_survey_date"):
-			frappe.db.set_value("Supplier", row.vendor, "last_satisfaction_survey_date", row.last_date)
 
 
 def backfill_missing_compliance_check_template():
@@ -1788,29 +1597,6 @@ def migrate_facility_applicable_to_yes_no():
 		"update `tabVendor Compliance Audit` set facility_applicable = 'No'"
 		" where facility_applicable in ('0', '') or facility_applicable is null"
 	)
-
-
-def backfill_license_insurance_masters():
-	# license_type/issuing_authority/insurance_type/insurer were converted
-	# from free-text Data fields to Link fields pointing at new master
-	# doctypes — any value already typed into an existing row needs a
-	# matching master record created for it, or that row's Link would show
-	# as invalid/unresolvable going forward. Idempotent: only ever creates
-	# what's missing.
-	_backfill_master_from_columns("License Type", "license_type_name", [
-		("Vendor Compliance Audit License", "license_type"),
-		("Licenses and Permits Template Item", "license_type"),
-	])
-	_backfill_master_from_columns("Issuing Authority", "issuing_authority_name", [
-		("Vendor Compliance Audit License", "issuing_authority"),
-	])
-	_backfill_master_from_columns("Insurance Type", "insurance_type_name", [
-		("Vendor Compliance Audit Insurance", "insurance_type"),
-		("Insurance Template Item", "insurance_type"),
-	])
-	_backfill_master_from_columns("Insurer", "insurer_name", [
-		("Vendor Compliance Audit Insurance", "insurer"),
-	])
 
 
 DEFAULT_COMPLIANCE_CHECK_SOURCES = [
@@ -2066,23 +1852,6 @@ def seed_indian_states():
 			frappe.get_doc({"doctype": "State", "state_name": state_name, "country": "India"}).insert(
 				ignore_permissions=True
 			)
-
-
-def _backfill_master_from_columns(master_doctype, master_fieldname, source_columns):
-	values = set()
-	for source_doctype, fieldname in source_columns:
-		if not frappe.db.has_column(source_doctype, fieldname):
-			continue
-		values.update(
-			frappe.db.sql_list(
-				f"select distinct `{fieldname}` from `tab{source_doctype}`"
-				f" where `{fieldname}` is not null and `{fieldname}` != ''"
-			)
-		)
-
-	for value in values:
-		if not frappe.db.exists(master_doctype, value):
-			frappe.get_doc({"doctype": master_doctype, master_fieldname: value}).insert(ignore_permissions=True)
 
 
 def _ensure_default_checklist_template():

@@ -17,6 +17,7 @@ frappe.ui.form.on("Supplier", {
 			"Vendor Support Ticket",
 			"Vendor Deboarding Request",
 			"Vendor Deboarding Checklist",
+			"Vendor Reboarding Request",
 		].forEach((doctype) => {
 			frm.can_make_methods[doctype] = () => false;
 		});

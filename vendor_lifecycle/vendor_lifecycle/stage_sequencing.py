@@ -288,6 +288,39 @@ def require_no_active_document_for_kyc(doc):
 		)
 
 
+def require_active_supplier_for_renewal(doc):
+	"""Call from before_insert() AND before_submit() on Vendor Compliance
+	Audit, Vendor Sign Off, and Vendor Sampling Evaluation, only when
+	doc.is_renewal is set (their shared flag for a standalone Renewal/
+	Ad-hoc, independent of onboarding/re-boarding).
+
+	Those three deliberately skip the whole onboarding/re-boarding
+	sequencing (see require_no_active_document_for_kyc's own is_renewal
+	branch above) - but that same bypass means nothing else stops one
+	being created or submitted against a vendor that's since been
+	deboarded or frozen, which doesn't make sense for a periodic recheck
+	of an already-active vendor. Checked again at submit, not just
+	creation, since the vendor's state can change while a draft sits
+	open. Deliberately never called for a plain onboarding/re-boarding
+	document - those follow their own pipeline rules and must stay
+	completely unaffected."""
+	if not doc.is_renewal or not doc.vendor:
+		return
+	disabled, is_frozen = frappe.db.get_value("Supplier", doc.vendor, ["disabled", "is_frozen"])
+	if disabled:
+		frappe.throw(
+			frappe._("{0} is currently disabled — Renewal/Ad-hoc checks only apply to an active vendor.").format(
+				doc.vendor
+			)
+		)
+	if is_frozen:
+		frappe.throw(
+			frappe._("{0} is currently frozen — Renewal/Ad-hoc checks only apply to an active vendor.").format(
+				doc.vendor
+			)
+		)
+
+
 def block_if_reboarding_completed(doc):
 	"""Call from before_insert() on Background Check / Compliance Audit /
 	Sampling Evaluation (not Sign Off — a passed Sign Off already blocks a

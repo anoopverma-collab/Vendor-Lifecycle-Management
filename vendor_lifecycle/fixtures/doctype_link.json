@@ -151,5 +151,22 @@
   "parentfield": "links",
   "parenttype": "DocType",
   "table_fieldname": null
+ },
+ {
+  "custom": 1,
+  "docstatus": 0,
+  "doctype": "DocType Link",
+  "group": "Vendor Lifecycle",
+  "hidden": 0,
+  "is_child_table": 0,
+  "link_doctype": "Vendor Reboarding Request",
+  "link_fieldname": "vendor",
+  "modified": "2026-09-21 12:00:00.000000",
+  "name": "sh4gmg62h8",
+  "parent": "Supplier",
+  "parent_doctype": null,
+  "parentfield": "links",
+  "parenttype": "DocType",
+  "table_fieldname": null
  }
 ]

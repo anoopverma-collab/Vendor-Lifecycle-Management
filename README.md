@@ -46,13 +46,21 @@ Sign-off is the final gate — contract and code of conduct sent and collected b
 
 ![Vendor Deboarding Request](docs/screenshots/vendor_deboarding_request.png)
 
-Once approved, a configurable Vendor Deboarding Checklist walks the closure through to completion — a signed Clearance Certificate is emailed to whichever contact is on file (KYC, Supplier's Primary Contact, or an additional address, deduplicated automatically) and collected back the same way — before disabling the Supplier on submit. The Checklist also has a toggle to temporarily re-enable the Supplier for up to a configurable number of days (for example, to let a final return or correction go through), which auto-disables again on expiry unless someone flips it back off first:
+Once approved, a configurable Vendor Deboarding Checklist walks the closure through to completion — a signed Clearance Certificate is emailed to whichever contact is on file (KYC, Supplier's Primary Contact, or an additional address, deduplicated automatically) and collected back the same way — before disabling the Supplier on submit. The Checklist also has a toggle to temporarily re-enable the Supplier for up to a configurable number of days (for example, to let a final return or correction go through), which auto-disables again on expiry unless someone flips it back off first — the button itself relabels between "Temporarily Enable Supplier" and "Disable Supplier" depending on which state it's currently in:
 
 ![Vendor Deboarding Checklist](docs/screenshots/vendor_deboarding_checklist.png)
+![Vendor Deboarding Checklist, before temporarily enabling the Supplier](docs/screenshots/vendor_deboarding_checklist_toggle_off.png)
+![Vendor Deboarding Checklist, after temporarily enabling the Supplier — the button flips to Disable Supplier](docs/screenshots/vendor_deboarding_checklist_toggle_on.png)
 
-**Reboarding.** A deboarded vendor doesn't have to be re-created from scratch. A Vendor Reboarding Request re-runs whichever of Background Check, Compliance Audit, Sampling Evaluation, and Sign-off Settings marks mandatory for re-boarding — its own Pipeline Progress view tracks each stage the same way Onboarding does — and re-activates the Supplier once every mandatory stage has passed.
+**Reboarding.** A deboarded vendor doesn't have to be re-created from scratch. A Vendor Reboarding Request re-runs whichever of Background Check, Compliance Audit, Sampling Evaluation, and Sign-off Settings marks mandatory for re-boarding — its own Pipeline Progress view tracks each stage the same way Onboarding does — and re-activates the Supplier once every mandatory stage has passed:
+
+![Vendor Reboarding Request, showing its Pipeline Progress tracker](docs/screenshots/vendor_reboarding_request.png)
 
 **Renewal & Ad-hoc.** Independent of any Onboarding/Reboarding run, a Compliance Audit or Sign-off can be created directly as a standalone **Renewal** (for periodic re-verification once a vendor is already active — compliance audit and contract validity dates, and whether an expiry auto-disables the Supplier, are all configurable), and a Sampling Evaluation as a standalone **Ad-hoc** re-check (for example, when a vendor introduces a new product) with zero effect on the Supplier's status either way. Scheduled reminder emails flag both an upcoming Renewal expiry and an unfinished draft Renewal, each independently toggleable in Settings.
+
+![Vendor Compliance Audit created as a standalone Renewal](docs/screenshots/vendor_compliance_audit_renewal.png)
+![Vendor Sign Off created as a standalone Renewal](docs/screenshots/vendor_sign_off_renewal.png)
+![Vendor Sampling Evaluation created as a standalone Ad-hoc re-check](docs/screenshots/vendor_sampling_evaluation_adhoc.png)
 
 **Configuration.** One Settings screen controls almost everything above — no code change required:
 

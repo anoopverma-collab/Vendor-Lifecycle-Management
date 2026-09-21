@@ -12,6 +12,7 @@ from vendor_lifecycle.vendor_lifecycle.stage_sequencing import (
 	enforce_sequential_cancellation,
 	enforce_sequential_creation,
 	force_override_stage,
+	require_active_supplier_for_renewal,
 	require_no_active_document_for_kyc,
 )
 from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
@@ -45,6 +46,7 @@ class VendorComplianceAudit(Document):
 	def before_insert(self):
 		self._derive_type_flags()
 		self._require_renewal_enabled()
+		require_active_supplier_for_renewal(self)
 		self._resolve_reboarding_kyc_and_vendor()
 		block_if_reboarding_completed(self)
 		require_no_active_document_for_kyc(self)
@@ -141,6 +143,21 @@ class VendorComplianceAudit(Document):
 			if self.is_reboarding
 			else VENDOR_LIFECYCLE_STATUS_COMPLIANCE_AUDIT_IN_PROGRESS,
 		)
+
+	def _resolve_valid_until(self):
+		# valid_until is a plain, ordinary field - the system never writes
+		# to it, calculates it, or blanks it. If the user actually typed a
+		# date in, that's what reaches the Supplier. If they left it
+		# blank, this works out what to send the Supplier instead (Audit
+		# Date + the validity period from Settings) without ever writing
+		# that computed value back into the document itself - the field
+		# stays exactly as the user left it, even after submit.
+		if self.valid_until:
+			return self.valid_until
+		if not self.audit_date:
+			return None
+		months = frappe.db.get_single_value("Vendor Lifecycle Settings", "compliance_audit_validity_months") or 0
+		return frappe.utils.add_months(self.audit_date, months)
 
 	def _clear_valid_scope_if_global(self):
 		# Runs on every save, not just the client-side toggle — a stale
@@ -417,6 +434,7 @@ class VendorComplianceAudit(Document):
 		return "Needs Review"
 
 	def before_submit(self):
+		require_active_supplier_for_renewal(self)
 		self._require_checklist_template_still_enabled()
 		self._require_license_template_still_enabled()
 		self._require_insurance_template_still_enabled()
@@ -645,10 +663,9 @@ class VendorComplianceAudit(Document):
 				else VENDOR_LIFECYCLE_STATUS_AUDIT_VERIFIED
 			)
 			frappe.db.set_value("Supplier", self.vendor, "vendor_lifecycle_status", status)
-			months = frappe.db.get_single_value("Vendor Lifecycle Settings", "compliance_audit_validity_months") or 0
-			valid_until = frappe.utils.add_months(self.audit_date, months)
-			self.db_set("valid_until", valid_until)
-			frappe.db.set_value("Supplier", self.vendor, "compliance_audit_valid_until", valid_until)
+			frappe.db.set_value(
+				"Supplier", self.vendor, "compliance_audit_valid_until", self._resolve_valid_until()
+			)
 		self._notify_outcome(DEFAULT_VENDOR_LIFECYCLE_PASSED_EMAIL_TEMPLATE)
 
 	def _handle_renewal_result(self):
@@ -662,10 +679,9 @@ class VendorComplianceAudit(Document):
 			return
 		settings = frappe.get_single("Vendor Lifecycle Settings")
 		if self.outcome == "Passed":
-			months = frappe.db.get_single_value("Vendor Lifecycle Settings", "compliance_audit_validity_months") or 0
-			valid_until = frappe.utils.add_months(self.audit_date, months)
-			self.db_set("valid_until", valid_until)
-			frappe.db.set_value("Supplier", self.vendor, "compliance_audit_valid_until", valid_until)
+			frappe.db.set_value(
+				"Supplier", self.vendor, "compliance_audit_valid_until", self._resolve_valid_until()
+			)
 			if settings.get("disable_vendor_on_compliance_audit_expiry"):
 				reason = get_disable_reason_for_supplier(self.vendor)
 				if not reason or reason == {"doctype": self.doctype, "name": self.name}:
@@ -771,12 +787,25 @@ class VendorComplianceAudit(Document):
 	def _revert_compliance_audit_valid_until_if_cancelled_pass(self):
 		if self.outcome != "Passed" or not self.vendor:
 			return None
-		previous_valid_until = frappe.db.get_value(
+		previous = frappe.db.get_value(
 			"Vendor Compliance Audit",
 			{"vendor": self.vendor, "docstatus": 1, "outcome": "Passed", "name": ["!=", self.name]},
-			"valid_until",
+			["valid_until", "audit_date"],
 			order_by="audit_date desc",
+			as_dict=True,
 		)
+		# That earlier audit's own valid_until may itself have been left
+		# blank by its user (see _resolve_valid_until) - the exact same
+		# fallback that was actually mirrored to the Supplier back then
+		# has to be re-derived here, or this would wrongly revert to
+		# blank instead of the value the Supplier genuinely still holds.
+		previous_valid_until = None
+		if previous:
+			if previous.valid_until:
+				previous_valid_until = previous.valid_until
+			elif previous.audit_date:
+				months = frappe.db.get_single_value("Vendor Lifecycle Settings", "compliance_audit_validity_months") or 0
+				previous_valid_until = frappe.utils.add_months(previous.audit_date, months)
 		frappe.db.set_value("Supplier", self.vendor, "compliance_audit_valid_until", previous_valid_until)
 		return previous_valid_until
 

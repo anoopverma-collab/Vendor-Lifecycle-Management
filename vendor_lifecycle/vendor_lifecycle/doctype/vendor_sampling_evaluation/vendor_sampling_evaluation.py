@@ -10,6 +10,7 @@ from vendor_lifecycle.vendor_lifecycle.stage_sequencing import (
 	enforce_sequential_cancellation,
 	enforce_sequential_creation,
 	force_override_stage,
+	require_active_supplier_for_renewal,
 	require_no_active_document_for_kyc,
 )
 from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
@@ -39,6 +40,7 @@ DEFAULT_VENDOR_LIFECYCLE_FAILED_EMAIL_TEMPLATE = "Vendor Lifecycle Stage Failed"
 class VendorSamplingEvaluation(Document):
 	def before_insert(self):
 		self._derive_type_flags()
+		require_active_supplier_for_renewal(self)
 		self._resolve_reboarding_kyc_and_vendor()
 		block_if_reboarding_completed(self)
 		require_no_active_document_for_kyc(self)
@@ -153,6 +155,7 @@ class VendorSamplingEvaluation(Document):
 			})
 
 	def before_submit(self):
+		require_active_supplier_for_renewal(self)
 		self._require_evaluation_outcome_reviewed()
 		self._require_samples_and_evaluation_rows()
 		self._require_evaluation_template_still_enabled()
