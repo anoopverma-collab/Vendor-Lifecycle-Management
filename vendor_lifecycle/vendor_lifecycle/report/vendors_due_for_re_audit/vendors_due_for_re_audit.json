@@ -5,11 +5,48 @@
  "disabled": 0,
  "docstatus": 0,
  "doctype": "Report",
- "filters": [],
+ "filters": [
+  {
+   "fieldname": "vendor",
+   "fieldtype": "Link",
+   "label": "Vendor",
+   "options": "Supplier"
+  },
+  {
+   "fieldname": "valid_until",
+   "fieldtype": "Date",
+   "label": "Valid Until (on or before)"
+  },
+  {
+   "fieldname": "days_remaining",
+   "fieldtype": "Int",
+   "label": "Days Remaining (at most)"
+  },
+  {
+   "default": "0",
+   "fieldname": "expired",
+   "fieldtype": "Check",
+   "label": "Expired Only"
+  },
+  {
+   "default": "0",
+   "description": "Valid Until is in the next 30 days.",
+   "fieldname": "due_soon",
+   "fieldtype": "Check",
+   "label": "Due Soon Only"
+  },
+  {
+   "default": "0",
+   "description": "Excludes audits whose Valid Until has already passed.",
+   "fieldname": "ignore_expired",
+   "fieldtype": "Check",
+   "label": "Ignore Expired Audits"
+  }
+ ],
  "idx": 0,
  "is_standard": "Yes",
  "letterhead": null,
- "modified": "2026-08-26 00:00:00.000000",
+ "modified": "2026-09-22 21:00:00.000000",
  "modified_by": "Administrator",
  "module": "Vendor Lifecycle",
  "name": "Vendors Due for Re-Audit",

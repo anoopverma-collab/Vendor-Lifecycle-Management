@@ -11,6 +11,7 @@ from vendor_lifecycle.vendor_lifecycle.doctype.vendor_deboarding_request.vendor_
 )
 from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
 	VENDOR_LIFECYCLE_STAGE_DEBOARDED,
+	VENDOR_LIFECYCLE_STAGE_DEBOARDING_FAILED,
 	get_kyc_vendor_contact,
 	require_vendor_lifecycle_email_account,
 	resolve_settled_active_stage,
@@ -63,8 +64,26 @@ class VendorDeboardingChecklist(Document):
 		block_if_stopped(self)
 		self._validate_only_one_checklist_per_request()
 		self._validate_item_status_changes_authorized()
-		self._validate_remark_required()
-		self._validate_at_least_one_assignee()
+		if not self.mark_as_failed:
+			# Both are about individual items being worked through
+			# properly — irrelevant once the whole Checklist is being
+			# marked Failed instead of completed normally.
+			self._validate_remark_required()
+			self._validate_at_least_one_assignee()
+		self._validate_mark_as_failed_authorized_and_reasoned()
+
+	def _validate_mark_as_failed_authorized_and_reasoned(self):
+		if not self.mark_as_failed:
+			return
+		if not PRIVILEGED_CHECKLIST_ROLES & set(frappe.get_roles()):
+			frappe.throw(
+				frappe._("Only a Vendor Lifecycle Manager or System Manager can mark a deboarding as Failed."),
+				frappe.PermissionError,
+			)
+		# mandatory_depends_on on the field only ever enforces client-side —
+		# same reasoning as _validate_remark_required() above.
+		if not self.failure_reason:
+			frappe.throw(frappe._("Give a reason before marking this deboarding as Failed."), frappe.MandatoryError)
 
 	def _validate_at_least_one_assignee(self):
 		for row in self.checklist_items:
@@ -125,6 +144,11 @@ class VendorDeboardingChecklist(Document):
 				)
 
 	def before_submit(self):
+		if self.mark_as_failed:
+			# The whole point of this checkbox — skip the normal
+			# completion/clearance gates, since a genuinely failed
+			# deboarding may never be able to satisfy them.
+			return
 		self._validate_all_items_progressed()
 		self._validate_clearance()
 
@@ -486,6 +510,18 @@ class VendorDeboardingChecklist(Document):
 		self.completed_on = today()
 		self.db_set("completed_on", self.completed_on)
 
+		if self.mark_as_failed:
+			# Deliberately does NOT disable the Supplier — deboarding
+			# didn't actually complete, so the vendor is left exactly as
+			# it was. Retrying is a fresh Deboarding Request + Checklist,
+			# not a resubmission of this one.
+			frappe.db.set_value("Supplier", self.supplier, {
+				"vendor_lifecycle_stage": VENDOR_LIFECYCLE_STAGE_DEBOARDING_FAILED,
+				"vendor_lifecycle_status": "Deboarding Failed",
+			})
+			frappe.db.set_value("Vendor Deboarding Request", self.deboarding_request, "status", "Deboarding Failed")
+			return
+
 		was_already_disabled = bool(frappe.db.get_value("Supplier", self.supplier, "disabled"))
 		frappe.db.set_value("Supplier", self.supplier, {
 			"disabled": 1,
@@ -528,11 +564,19 @@ class VendorDeboardingChecklist(Document):
 		)
 		if other_submitted_exists:
 			return
-		frappe.db.set_value("Supplier", self.supplier, {
-			"disabled": 0,
-			"vendor_lifecycle_status": "Active",
-			"vendor_lifecycle_stage": resolve_settled_active_stage(self.supplier),
-		})
+		if self.mark_as_failed:
+			# Never disabled the Supplier in the first place — only the
+			# Stage/Status markers this submission itself set need undoing.
+			frappe.db.set_value("Supplier", self.supplier, {
+				"vendor_lifecycle_status": "Active",
+				"vendor_lifecycle_stage": resolve_settled_active_stage(self.supplier),
+			})
+		else:
+			frappe.db.set_value("Supplier", self.supplier, {
+				"disabled": 0,
+				"vendor_lifecycle_status": "Active",
+				"vendor_lifecycle_stage": resolve_settled_active_stage(self.supplier),
+			})
 		if self.deboarding_request:
 			frappe.db.set_value("Vendor Deboarding Request", self.deboarding_request, "status", "Approved")
 
@@ -562,7 +606,7 @@ class VendorDeboardingChecklist(Document):
 
 	@frappe.whitelist()
 	def get_temporary_enable_button_info(self):
-		if self.docstatus != 1 or not self._can_temporarily_enable():
+		if self.docstatus != 1 or self.mark_as_failed or not self._can_temporarily_enable():
 			return {"show": False}
 		info = {"show": True, "is_temporarily_enabled": bool(self.is_temporarily_enabled)}
 		if self.is_temporarily_enabled and self.temporarily_enabled_on:
@@ -593,6 +637,8 @@ class VendorDeboardingChecklist(Document):
 		Either direction can be repeated afterward for another window."""
 		if self.docstatus != 1:
 			frappe.throw(frappe._("This Checklist must be submitted first."))
+		if self.mark_as_failed:
+			frappe.throw(frappe._("This deboarding was marked Failed — the Supplier was never disabled by it."))
 		if not self._can_temporarily_enable():
 			frappe.throw(
 				frappe._("Only a Vendor Lifecycle Manager or System Manager can do this."), frappe.PermissionError

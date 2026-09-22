@@ -21,9 +21,9 @@ def execute(filters: dict | None = None):
 		frappe.throw(_("Select a View By option (Onboarding Request or Vendor KYC) to see this report."))
 
 	if view_by == "Onboarding Request":
-		return get_request_columns(), get_request_data()
+		return get_request_columns(), get_request_data(filters)
 
-	return get_kyc_columns(), get_kyc_data()
+	return get_kyc_columns(), get_kyc_data(filters)
 
 
 def get_kyc_columns() -> list[dict]:
@@ -39,11 +39,22 @@ def get_kyc_columns() -> list[dict]:
 	]
 
 
-def get_kyc_data() -> list[dict]:
+def get_kyc_data(filters: dict | None = None) -> list[dict]:
+	filters = filters or {}
+	conditions = []
+	params = {}
+	if filters.get("company_name"):
+		conditions.append("vk.firm_name like %(company_name)s")
+		params["company_name"] = f"%{filters['company_name']}%"
+	if filters.get("kyc"):
+		conditions.append("vk.name = %(kyc)s")
+		params["kyc"] = filters["kyc"]
+	where_clause = f"where {' and '.join(conditions)}" if conditions else ""
+
 	# Each stage's own latest (by creation) record for the KYC — a vendor
 	# who redid a stage shouldn't show stale data from an earlier attempt.
 	rows = frappe.db.sql(
-		"""
+		f"""
 		select
 			vk.name as kyc,
 			vk.firm_name,
@@ -76,8 +87,10 @@ def get_kyc_data() -> list[dict]:
 				order by so.creation desc limit 1
 			) as sign_off_status
 		from `tabVendor KYC` vk
+		{where_clause}
 		order by vk.creation desc
 		""",
+		params,
 		as_dict=True,
 	)
 
@@ -100,7 +113,7 @@ def get_request_columns() -> list[dict]:
 	]
 
 
-def get_request_data() -> list[dict]:
+def get_request_data(filters: dict | None = None) -> list[dict]:
 	# Anchored on the Onboarding Request instead of the KYC, so a request
 	# that hasn't had KYC started yet still shows up (the KYC-anchored view
 	# above only ever sees vendors who've reached KYC). Each request's
@@ -110,6 +123,17 @@ def get_request_data() -> list[dict]:
 		"(select vk.name from `tabVendor KYC` vk"
 		" where vk.onboarding_request = vor.name order by vk.creation desc limit 1)"
 	)
+
+	filters = filters or {}
+	conditions = []
+	params = {}
+	if filters.get("company_name"):
+		conditions.append("vor.company_name like %(company_name)s")
+		params["company_name"] = f"%{filters['company_name']}%"
+	if filters.get("kyc"):
+		conditions.append(f"{latest_kyc_for_request} = %(kyc)s")
+		params["kyc"] = filters["kyc"]
+	where_clause = f"where {' and '.join(conditions)}" if conditions else ""
 
 	rows = frappe.db.sql(
 		f"""
@@ -147,8 +171,10 @@ def get_request_data() -> list[dict]:
 				order by so.creation desc limit 1
 			) as sign_off_status
 		from `tabVendor Onboarding Request` vor
+		{where_clause}
 		order by vor.creation desc
 		""",
+		params,
 		as_dict=True,
 	)
 

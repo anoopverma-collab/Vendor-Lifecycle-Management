@@ -156,6 +156,7 @@ def after_migrate():
 	backfill_supplier_contract_valid_until()
 	backfill_settings_defaults()
 	rename_ndc_terminology()
+	rename_stage_in_process_terminology()
 	migrate_onboarding_request_to_submittable()
 	remove_stale_setting("request_edit_override_role")
 	migrate_kyc_firm_address_to_address_line_1()
@@ -190,6 +191,7 @@ def after_migrate():
 	migrate_is_resolvable_check_to_select()
 	remove_stale_setting("deboarding_notification_provider")
 	remove_stale_number_card("Vendors Through App")
+	backfill_ticket_resolved_on()
 	install_getting_started_sample()
 
 
@@ -892,6 +894,26 @@ def rename_ndc_terminology():
 		frappe.db.set_single_value("Vendor Lifecycle Settings", "disable_timing", NDC_TO_CLEARANCE[current])
 
 
+# The three "actively in progress" Vendor Lifecycle Stage values were
+# renamed to read as a status rather than a document type name — the
+# terminal/failed values (Onboarded, Onboarding Failed, Deboarded, ...)
+# never meant "still ongoing" and were left alone.
+STAGE_IN_PROCESS_RENAME = {
+	"Onboarding": "Onboarding in Process",
+	"Deboarding": "Deboarding in Process",
+	"Reboarding": "Reboarding in Process",
+}
+
+
+def rename_stage_in_process_terminology():
+	if not frappe.db.has_column("Supplier", "vendor_lifecycle_stage"):
+		return
+	for old, new in STAGE_IN_PROCESS_RENAME.items():
+		frappe.db.sql(
+			"update `tabSupplier` set vendor_lifecycle_stage = %s where vendor_lifecycle_stage = %s", (new, old)
+		)
+
+
 def migrate_onboarding_request_to_submittable():
 	# Vendor Onboarding Request dropped its custom status field (Draft/
 	# Accepted/Rejected) in favor of Frappe's native submit/cancel lifecycle
@@ -1462,6 +1484,24 @@ def backfill_default_satisfaction_rating_template():
 		frappe.db.set_single_value(
 			"Vendor Lifecycle Settings", "default_rating_template", DEFAULT_SATISFACTION_RATING_TEMPLATE
 		)
+
+
+def backfill_ticket_resolved_on():
+	# resolved_on is new — an existing ticket already sitting in Resolved
+	# never had it set by mark_resolved() at the time. Its own `modified`
+	# is the best available stand-in (not exact, but close enough for an
+	# aging report — the alternative, leaving it blank, would make the
+	# report keep counting these up to today forever, exactly the bug
+	# this field exists to fix).
+	if not frappe.db.has_column("Vendor Support Ticket", "resolved_on"):
+		return
+	frappe.db.sql(
+		"""
+		update `tabVendor Support Ticket`
+		set resolved_on = modified
+		where status = 'Resolved' and resolved_on is null
+		"""
+	)
 
 
 def backfill_missing_compliance_check_template():

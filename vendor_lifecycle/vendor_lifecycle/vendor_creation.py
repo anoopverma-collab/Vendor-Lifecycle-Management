@@ -55,12 +55,13 @@ VENDOR_LIFECYCLE_STATUS_DISABLED = "Disabled"
 
 # --- vendor_lifecycle_stage (coarse — "which pipeline is this vendor
 # currently in, at a glance") --------------------------------------------
-VENDOR_LIFECYCLE_STAGE_ONBOARDING = "Onboarding"
+VENDOR_LIFECYCLE_STAGE_ONBOARDING = "Onboarding in Process"
 VENDOR_LIFECYCLE_STAGE_ONBOARDING_FAILED = "Onboarding Failed"
 VENDOR_LIFECYCLE_STAGE_ONBOARDED = "Onboarded"
-VENDOR_LIFECYCLE_STAGE_DEBOARDING = "Deboarding"
+VENDOR_LIFECYCLE_STAGE_DEBOARDING = "Deboarding in Process"
+VENDOR_LIFECYCLE_STAGE_DEBOARDING_FAILED = "Deboarding Failed"
 VENDOR_LIFECYCLE_STAGE_DEBOARDED = "Deboarded"
-VENDOR_LIFECYCLE_STAGE_REBOARDING = "Reboarding"
+VENDOR_LIFECYCLE_STAGE_REBOARDING = "Reboarding in Process"
 VENDOR_LIFECYCLE_STAGE_REBOARDING_FAILED = "Reboarding Failed"
 VENDOR_LIFECYCLE_STAGE_REBOARDED = "Reboarded"
 

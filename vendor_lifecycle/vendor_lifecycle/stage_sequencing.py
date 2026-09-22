@@ -384,6 +384,37 @@ def block_if_onboarding_request_stopped(doc):
 	)
 
 
+def stopped_state_for_reboarding(reboarding_request):
+	"""Re-boarding's own equivalent of stopped_state() above, scoped to a
+	Vendor Reboarding Request instead of a Vendor Onboarding Request — see
+	block_if_reboarding_request_stopped below."""
+	if not reboarding_request:
+		return False
+	return bool(frappe.db.get_value("Vendor Reboarding Request", reboarding_request, "is_stopped"))
+
+
+def block_if_reboarding_request_stopped(doc):
+	"""Call from validate() and before_cancel() on the 4 re-boarding stage
+	doctypes (Background Check, Compliance Audit, Sampling Evaluation,
+	Sign Off), alongside their existing block_if_onboarding_request_
+	stopped(self) call — that one only ever resolves the vendor's
+	ORIGINAL onboarding request (via doc.kyc, which re-boarding also
+	populates, reusing the vendor's original KYC), never this vendor's
+	current re-boarding attempt, so a Stopped Vendor Reboarding Request
+	needs this separate check to actually block anything. A no-op for an
+	onboarding-flagged doc — reboarding_request is blank there."""
+	if not getattr(doc, "is_reboarding", False):
+		return
+	if not stopped_state_for_reboarding(doc.reboarding_request):
+		return
+	frappe.throw(
+		frappe._(
+			"This Vendor Reboarding Request has been stopped — see its Comments for why — re-open it if you want"
+			" to proceed."
+		)
+	)
+
+
 def enforce_sequential_creation(doc):
 	"""Call from validate() on any stage doctype after Vendor KYC. Requires
 	the nearest earlier *mandatory* stage to already be submitted (passed,

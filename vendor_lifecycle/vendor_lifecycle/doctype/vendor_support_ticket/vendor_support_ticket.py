@@ -89,6 +89,7 @@ class VendorSupportTicket(Document):
 		self.db_set("resolution", resolution or self.resolution)
 		self.db_set("status", "Resolved")
 		self.db_set("resolved_by", frappe.session.user)
+		self.db_set("resolved_on", now_datetime())
 		self.add_comment("Info", frappe._("Marked Resolved by {0}").format(frappe.session.user))
 		self._notify_resolved()
 
@@ -155,6 +156,7 @@ class VendorSupportTicket(Document):
 			frappe.throw(frappe._("Only a Resolved or Invalid ticket can be reopened — a Closed ticket is final."))
 		self.db_set("status", "Reopened")
 		self.db_set("closed_on", None)
+		self.db_set("resolved_on", None)
 		self.add_comment("Info", frappe._("Reopened by {0}").format(frappe.session.user))
 		self._notify_reopened()
 

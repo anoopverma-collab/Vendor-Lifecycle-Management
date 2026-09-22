@@ -13,6 +13,8 @@
   "completed_on",
   "company",
   "additional_email",
+  "mark_as_failed",
+  "failure_reason",
   "section_break_items",
   "checklist_items",
   "section_break_clearance",
@@ -78,6 +80,20 @@
    "fieldtype": "Data",
    "label": "Additional Supplier Email",
    "options": "Email"
+  },
+  {
+   "default": "0",
+   "description": "Bypasses completion/clearance checks. Supplier stays enabled.",
+   "fieldname": "mark_as_failed",
+   "fieldtype": "Check",
+   "label": "Mark Deboarding as Failed"
+  },
+  {
+   "depends_on": "eval:doc.mark_as_failed",
+   "fieldname": "failure_reason",
+   "fieldtype": "Small Text",
+   "label": "Reason Deboarding Failed",
+   "mandatory_depends_on": "eval:doc.mark_as_failed"
   },
   {
    "fieldname": "section_break_items",

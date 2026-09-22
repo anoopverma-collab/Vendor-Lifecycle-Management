@@ -55,7 +55,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Status",
-   "options": "Draft\nApproved\nRejected\nVendor Disabled",
+   "options": "Draft\nApproved\nRejected\nVendor Disabled\nDeboarding Failed",
    "read_only": 1
   },
   {

@@ -5,10 +5,29 @@ import frappe
 from frappe.model.document import Document
 
 from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
+	VENDOR_LIFECYCLE_STAGE_DEBOARDING,
+	VENDOR_LIFECYCLE_STAGE_DEBOARDING_FAILED,
+	VENDOR_LIFECYCLE_STAGE_ONBOARDED,
+	VENDOR_LIFECYCLE_STAGE_ONBOARDING,
+	VENDOR_LIFECYCLE_STAGE_ONBOARDING_FAILED,
+	VENDOR_LIFECYCLE_STAGE_REBOARDED,
 	VENDOR_LIFECYCLE_STAGE_REBOARDING,
-	VENDOR_LIFECYCLE_STATUS_DISABLED,
 	resolve_vendor_lifecycle_company_name,
 	send_vendor_lifecycle_email,
+)
+
+# A new Reboarding Request only makes sense once a vendor has actually
+# settled into Deboarded (or already failed a re-boarding attempt) —
+# never mid-Onboarding, never on a vendor that's never actually been
+# deboarded (Onboarded), never already Reboarded, and never mid- or
+# already-failed Deboarding either.
+BLOCKED_STAGES_FOR_NEW_REBOARDING_REQUEST = (
+	VENDOR_LIFECYCLE_STAGE_ONBOARDING,
+	VENDOR_LIFECYCLE_STAGE_ONBOARDING_FAILED,
+	VENDOR_LIFECYCLE_STAGE_ONBOARDED,
+	VENDOR_LIFECYCLE_STAGE_REBOARDED,
+	VENDOR_LIFECYCLE_STAGE_DEBOARDING,
+	VENDOR_LIFECYCLE_STAGE_DEBOARDING_FAILED,
 )
 
 DEFAULT_REBOARDING_REQUEST_RECEIVED_EMAIL_TEMPLATE = "Vendor Reboarding Request Received"
@@ -20,11 +39,45 @@ DEFAULT_REBOARDING_REQUEST_REJECTED_CREATOR_EMAIL_TEMPLATE = "Vendor Reboarding 
 
 class VendorReboardingRequest(Document):
 	def before_insert(self):
+		self._require_stage_allows_new_request()
 		self._resolve_original_kyc()
 		self._apply_current_supplier_contact()
 		self._apply_current_supplier_billing_currency_and_country(supplier_name=self.vendor)
 		self._resolve_original_deboarding_request()
 		self._block_second_active_request()
+
+	def _require_stage_allows_new_request(self):
+		if not self.vendor:
+			return
+		stage = frappe.db.get_value("Supplier", self.vendor, "vendor_lifecycle_stage")
+		if stage in BLOCKED_STAGES_FOR_NEW_REBOARDING_REQUEST:
+			frappe.throw(
+				frappe._("A Reboarding Request cannot be created while {0}'s Vendor Lifecycle Stage is {1}.").format(
+					self.vendor, frappe.bold(stage)
+				)
+			)
+		if stage != VENDOR_LIFECYCLE_STAGE_REBOARDING:
+			return
+		# Re-boarding is already under way — only allow a new attempt if the
+		# request driving that Stage is Stopped (stuck, going nowhere). A
+		# failed stage document (Background Check/Compliance Audit/
+		# Sampling Evaluation/Sign Off) already flips Stage itself off to
+		# Reboarding Failed the moment it fails (see each doctype's own
+		# _handle_failed_result), so this branch is only ever reached while
+		# a genuinely still-open attempt exists — nothing extra to check
+		# for that case, unlike Vendor Deboarding Request (whose own
+		# status field only changes on the *Checklist's* submit, not the
+		# stage documents' own).
+		blocking = frappe.db.exists(
+			"Vendor Reboarding Request",
+			{"vendor": self.vendor, "docstatus": 1, "status": "Approved", "is_stopped": 0},
+		)
+		if blocking:
+			frappe.throw(
+				frappe._(
+					"{0} already has a Reboarding Request in progress ({1}). Stop it before creating a new one."
+				).format(self.vendor, frappe.get_desk_link("Vendor Reboarding Request", blocking))
+			)
 
 	def _resolve_original_kyc(self):
 		if not self.vendor:
@@ -197,6 +250,10 @@ class VendorReboardingRequest(Document):
 		# updating on an already-created document.
 		self.days_since_deboarded = (frappe.utils.getdate(frappe.utils.nowdate()) - frappe.utils.getdate(completed_on)).days
 
+	def before_cancel(self):
+		if self.is_stopped:
+			frappe.throw(frappe._("This request has been stopped — see its Comments for why — re-open it before cancelling."))
+
 	def _block_second_active_request(self):
 		if not self.vendor:
 			return
@@ -207,10 +264,19 @@ class VendorReboardingRequest(Document):
 		# attempt. Checked against workflow_state (Frappe's own canonical
 		# field, set directly by apply_workflow()) rather than this app's
 		# own status field, which only gets synced onto it as a side
-		# effect of validate() running.
+		# effect of validate() running. is_stopped=0 is excluded the same
+		# way — a Stopped request is stuck going nowhere (see stop()), so
+		# it shouldn't permanently occupy this slot either; otherwise
+		# _require_stage_allows_new_request()'s own "Stopped -> allow a
+		# new attempt" exception could never actually be reached.
 		if frappe.db.exists(
 			"Vendor Reboarding Request",
-			{"vendor": self.vendor, "docstatus": ["in", [0, 1]], "workflow_state": ["not in", ["Trashed", "Rejected"]]},
+			{
+				"vendor": self.vendor,
+				"docstatus": ["in", [0, 1]],
+				"workflow_state": ["not in", ["Trashed", "Rejected"]],
+				"is_stopped": 0,
+			},
 		):
 			frappe.throw(
 				frappe._(
@@ -239,19 +305,17 @@ class VendorReboardingRequest(Document):
 	def _require_vendor_currently_disabled(self):
 		if not self.vendor:
 			return
-		disabled, status = frappe.db.get_value("Supplier", self.vendor, ["disabled", "vendor_lifecycle_status"])
+		# Deliberately just disabled=1 now — no longer requires
+		# vendor_lifecycle_status == "Disabled" specifically, matching the
+		# vendor field's own picker (see the .js setup(), which now offers
+		# every disabled Supplier, not only one disabled through this
+		# app's own Deboarding process).
+		disabled = frappe.db.get_value("Supplier", self.vendor, "disabled")
 		if not disabled:
 			frappe.throw(
-				frappe._("{0} is not currently disabled — Re-boarding only applies to a deboarded vendor.").format(
+				frappe._("{0} is not currently disabled — Re-boarding only applies to a disabled vendor.").format(
 					self.vendor
 				)
-			)
-		if status != VENDOR_LIFECYCLE_STATUS_DISABLED:
-			frappe.throw(
-				frappe._(
-					"{0} is disabled, but not through this app's own Deboarding process (its lifecycle status is"
-					" {1}) — Re-boarding only applies to a vendor that was actually deboarded."
-				).format(self.vendor, frappe.bold(status or frappe._("not set")))
 			)
 
 	def before_submit(self):
@@ -353,6 +417,50 @@ class VendorReboardingRequest(Document):
 		return _compute_financial_summary(self.vendor)
 
 	@frappe.whitelist()
+	def stop(self, reason):
+		"""Blocks the whole re-boarding pipeline for this request — Background
+		Check, Compliance Audit, Sampling Evaluation, and Sign Off — from
+		being created, saved, submitted, or cancelled (see
+		block_if_reboarding_request_stopped in stage_sequencing.py, the
+		actual enforcement all 4 of those doctypes call into) until this is
+		Re-opened. Same mechanism, same lack of extra role restriction, as
+		Vendor Onboarding Request's own stop()."""
+		if self.docstatus != 1:
+			frappe.throw(frappe._("This request must be submitted before it can be stopped."))
+		if self.is_stopped:
+			frappe.throw(frappe._("This request is already stopped."))
+		if not (reason or "").strip():
+			frappe.throw(frappe._("A reason is required to stop this request."))
+
+		if self._sign_off_stage_state() == "Completed":
+			frappe.throw(frappe._("Sign Off is already Completed for this request — there's nothing left to stop."))
+
+		self.db_set("is_stopped", 1)
+		self.add_comment("Comment", text=frappe._("Stopped: {0}").format(reason.strip()))
+
+	@frappe.whitelist()
+	def reopen(self, reason):
+		if self.docstatus != 1:
+			frappe.throw(frappe._("This request must be submitted before it can be re-opened."))
+		if not self.is_stopped:
+			frappe.throw(frappe._("This request isn't stopped."))
+		if not (reason or "").strip():
+			frappe.throw(frappe._("A reason is required to re-open this request."))
+
+		self.db_set("is_stopped", 0)
+		self.add_comment("Comment", text=frappe._("Re-opened: {0}").format(reason.strip()))
+
+	def _sign_off_stage_state(self):
+		"""Just the Sign Off row from get_pipeline_progress() — reused by
+		stop() above so "is Sign Off Completed" can never drift from what
+		the pipeline progress bar itself shows. Same reasoning as Vendor
+		Onboarding Request's own identical helper."""
+		for stage in self.get_pipeline_progress():
+			if stage["label"] == "Sign Off":
+				return stage["state"]
+		return "Not Started"
+
+	@frappe.whitelist()
 	def get_reboarding_stage_info(self):
 		"""Whether a Retry Sign-off should be offered instead of a first
 		attempt — mirrors stage_sequencing.get_available_stages' own
@@ -371,8 +479,21 @@ class VendorReboardingRequest(Document):
 		including Sign-off, stop being offered at all once reboarding_
 		complete is true (see stage_sequencing.block_if_reboarding_
 		completed, which enforces this same rule server-side, not just in
-		the client's own button visibility)."""
+		the client's own button visibility). Checked first, same as
+		get_available_stages() does for onboarding — a Stopped request
+		reports nothing else, since block_if_reboarding_request_stopped is
+		the hard, unconditional stop regardless of what stage 4's own
+		state would otherwise say."""
 		from vendor_lifecycle.vendor_lifecycle.stage_sequencing import STAGE_SEQUENCE, nearest_requirement
+
+		if self.is_stopped:
+			return {
+				"reboarding_complete": False,
+				"sign_off_available": False,
+				"sign_off_is_retry": False,
+				"missing_requirement": {},
+				"stopped": True,
+			}
 
 		reboarding_complete = frappe.db.exists(
 			"Vendor Sign Off", {"reboarding_request": self.name, "docstatus": 1, "sign_off_failed": 0}
@@ -401,6 +522,7 @@ class VendorReboardingRequest(Document):
 			"sign_off_available": not blocked,
 			"sign_off_is_retry": not blocked and bool(has_failed_sign_off),
 			"missing_requirement": missing_requirement,
+			"stopped": False,
 		}
 
 	@frappe.whitelist()

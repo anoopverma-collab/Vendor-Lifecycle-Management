@@ -13,12 +13,23 @@
    "mandatory": 1,
    "options": "\nOnboarding Request\nVendor KYC",
    "reqd": 1
+  },
+  {
+   "fieldname": "company_name",
+   "fieldtype": "Data",
+   "label": "Company / Firm Name"
+  },
+  {
+   "fieldname": "kyc",
+   "fieldtype": "Link",
+   "label": "Vendor KYC",
+   "options": "Vendor KYC"
   }
  ],
  "idx": 0,
  "is_standard": "Yes",
  "letterhead": null,
- "modified": "2026-09-08 00:00:00.000000",
+ "modified": "2026-09-22 20:00:00.000000",
  "modified_by": "Administrator",
  "module": "Vendor Lifecycle",
  "name": "Vendor Onboarding Pipeline",

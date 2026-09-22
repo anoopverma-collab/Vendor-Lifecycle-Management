@@ -7,7 +7,7 @@ from frappe import _
 
 def execute(filters: dict | None = None):
 	columns = get_columns()
-	data = get_data()
+	data = get_data(filters)
 	return columns, data
 
 
@@ -26,9 +26,23 @@ def get_columns() -> list[dict]:
 	]
 
 
-def get_data() -> list[dict]:
+def get_data(filters: dict | None = None) -> list[dict]:
+	filters = filters or {}
+	conditions = []
+	params = {}
+	if filters.get("vendor"):
+		conditions.append("vdr.vendor = %(vendor)s")
+		params["vendor"] = filters["vendor"]
+	if filters.get("request"):
+		conditions.append("vdr.name = %(request)s")
+		params["request"] = filters["request"]
+	if filters.get("request_status"):
+		conditions.append("vdr.status = %(request_status)s")
+		params["request_status"] = filters["request_status"]
+	where_clause = f"where {' and '.join(conditions)}" if conditions else ""
+
 	rows = frappe.db.sql(
-		"""
+		f"""
 		select
 			vdr.name as request,
 			vdr.vendor,
@@ -45,8 +59,10 @@ def get_data() -> list[dict]:
 		from `tabVendor Deboarding Request` vdr
 		left join `tabVendor Deboarding Checklist` vdc on vdc.deboarding_request = vdr.name and vdc.docstatus != 2
 		left join `tabSupplier` s on s.name = vdr.vendor
+		{where_clause}
 		order by vdr.creation desc
 		""",
+		params,
 		as_dict=True,
 	)
 

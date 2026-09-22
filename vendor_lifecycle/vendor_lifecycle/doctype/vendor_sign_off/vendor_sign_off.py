@@ -6,6 +6,7 @@ from frappe.model.document import Document
 
 from vendor_lifecycle.vendor_lifecycle.stage_sequencing import (
 	block_if_onboarding_request_stopped,
+	block_if_reboarding_request_stopped,
 	enforce_sequential_cancellation,
 	enforce_sequential_creation,
 	is_sampling_mandatory,
@@ -59,6 +60,7 @@ class VendorSignOff(Document):
 	def validate(self):
 		self._derive_type_flags()
 		block_if_onboarding_request_stopped(self)
+		block_if_reboarding_request_stopped(self)
 		sync_vendor_field(self)
 		sync_onboarding_request_field(self)
 		require_kyc_unless_reboarding(self)
@@ -589,6 +591,13 @@ class VendorSignOff(Document):
 		try:
 			self.notify_document_received(document_type)
 		except Exception:
+			# A failure here (e.g. no usable Email Account) must never look
+			# like the save itself failed — frappe.throw() inside
+			# notify_document_received() queues its message to the client
+			# before this except block ever runs, so catching the
+			# exception alone doesn't stop it from being shown. Clearing it
+			# is what actually keeps this a silent, logged-only failure.
+			frappe.clear_last_message()
 			frappe.log_error(
 				title="Vendor Sign Off: failed to notify creator of received document",
 				message=frappe.get_traceback(),
@@ -608,6 +617,11 @@ class VendorSignOff(Document):
 			return
 		if not frappe.db.exists("Email Template", DEFAULT_SIGNOFF_RECEIVED_EMAIL_TEMPLATE):
 			return
+		# Same forced-account handling as _send_document_email() — without
+		# this, Communication.get_outgoing_email_account() falls back to
+		# the site's global default outgoing account (or none at all) and
+		# ignores the account configured in Vendor Lifecycle Settings.
+		email_account = require_vendor_lifecycle_email_account(settings)
 		cc = vendor_lifecycle_cc_list(settings)
 
 		template = frappe.get_doc("Email Template", DEFAULT_SIGNOFF_RECEIVED_EMAIL_TEMPLATE)
@@ -618,15 +632,20 @@ class VendorSignOff(Document):
 
 		from frappe.core.doctype.communication.email import make as make_communication
 
-		make_communication(
+		result = make_communication(
 			doctype=self.doctype,
 			name=self.name,
 			subject=subject,
 			content=message,
+			sender=email_account.email_id,
 			recipients=creator_email,
 			cc=", ".join(cc) if cc else None,
-			send_email=True,
+			send_email=False,
 		)
+
+		comm = frappe.get_doc("Communication", result["name"])
+		comm.db_set("email_account", email_account.name, update_modified=False)
+		comm.send_email()
 
 	def _resolve_owner_email(self):
 		# Same "Administrator" special-case Frappe itself uses when
@@ -787,6 +806,7 @@ class VendorSignOff(Document):
 
 	def on_cancel(self):
 		block_if_onboarding_request_stopped(self)
+		block_if_reboarding_request_stopped(self)
 		enforce_sequential_cancellation(self)  # no-op today — Sign Off is the last stage
 		# Unconditional, regardless of Type — contract_valid_until is
 		# described as tracking "the most recent passed and submitted Sign

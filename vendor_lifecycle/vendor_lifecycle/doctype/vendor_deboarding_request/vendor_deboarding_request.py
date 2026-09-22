@@ -5,7 +5,12 @@ import frappe
 from frappe.model.document import Document
 
 from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
+	VENDOR_LIFECYCLE_STAGE_DEBOARDED,
 	VENDOR_LIFECYCLE_STAGE_DEBOARDING,
+	VENDOR_LIFECYCLE_STAGE_ONBOARDING,
+	VENDOR_LIFECYCLE_STAGE_ONBOARDING_FAILED,
+	VENDOR_LIFECYCLE_STAGE_REBOARDING,
+	VENDOR_LIFECYCLE_STAGE_REBOARDING_FAILED,
 	get_kyc_vendor_contact,
 	resolve_vendor_lifecycle_company_name,
 	send_vendor_lifecycle_email,
@@ -13,6 +18,19 @@ from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
 )
 
 OPEN_PO_STATUSES = ["Draft", "To Receive and Bill", "To Bill", "To Receive"]
+
+# A new Deboarding Request only makes sense once a vendor has actually
+# settled somewhere (Onboarded/Reboarded), already failed a Deboarding
+# Checklist (Deboarding Failed), or was never in the pipeline's active
+# phases to begin with — never mid-Onboarding/Reboarding, and never on an
+# already-Deboarded vendor.
+BLOCKED_STAGES_FOR_NEW_DEBOARDING_REQUEST = (
+	VENDOR_LIFECYCLE_STAGE_ONBOARDING,
+	VENDOR_LIFECYCLE_STAGE_ONBOARDING_FAILED,
+	VENDOR_LIFECYCLE_STAGE_DEBOARDED,
+	VENDOR_LIFECYCLE_STAGE_REBOARDING,
+	VENDOR_LIFECYCLE_STAGE_REBOARDING_FAILED,
+)
 
 # Same hardcoded pair Vendor KYC uses for its own Freeze/Unfreeze Supplier
 # button (see SUPPLIER_FREEZE_TOGGLE_ROLES in vendor_kyc.py).
@@ -25,6 +43,8 @@ DEFAULT_DEBOARDING_REQUEST_APPROVED_EMAIL_TEMPLATE = "Vendor Deboarding Request 
 
 class VendorDeboardingRequest(Document):
 	def before_insert(self):
+		self._require_stage_allows_new_request()
+
 		# Always the actual creation date, never user-set — read-only on the
 		# form for exactly this reason.
 		self.request_date = frappe.utils.nowdate()
@@ -32,6 +52,35 @@ class VendorDeboardingRequest(Document):
 		if not self.ratings:
 			for row in get_deboarding_rating_criteria():
 				self.append("ratings", {"criteria": row.name})
+
+	def _require_stage_allows_new_request(self):
+		if not self.vendor:
+			return
+		stage = frappe.db.get_value("Supplier", self.vendor, "vendor_lifecycle_stage")
+		if stage in BLOCKED_STAGES_FOR_NEW_DEBOARDING_REQUEST:
+			frappe.throw(
+				frappe._("A Deboarding Request cannot be created while {0}'s Vendor Lifecycle Stage is {1}.").format(
+					self.vendor, frappe.bold(stage)
+				)
+			)
+		if stage != VENDOR_LIFECYCLE_STAGE_DEBOARDING:
+			return
+		# Deboarding is already under way — only allow a new attempt if the
+		# request driving that Stage is Stopped (stuck, going nowhere) or no
+		# longer Approved (its Checklist already resolved this one way or
+		# another, e.g. Deboarding Failed already flipped its status off
+		# "Approved" — see VendorDeboardingChecklist.on_submit()).
+		blocking = frappe.db.exists(
+			"Vendor Deboarding Request",
+			{"vendor": self.vendor, "docstatus": 1, "status": "Approved", "is_stopped": 0},
+		)
+		if blocking:
+			frappe.throw(
+				frappe._(
+					"{0} already has a Deboarding Request in progress ({1}). Stop it, or wait for its Checklist"
+					" to resolve, before creating a new one."
+				).format(self.vendor, frappe.get_desk_link("Vendor Deboarding Request", blocking))
+			)
 
 	def validate(self):
 		self._enforce_rejected_is_frozen()
@@ -75,7 +124,10 @@ class VendorDeboardingRequest(Document):
 		# submitted (see VendorDeboardingChecklist.on_submit).
 		self.db_set("status", "Approved")
 		if self.vendor:
-			frappe.db.set_value("Supplier", self.vendor, "vendor_lifecycle_stage", VENDOR_LIFECYCLE_STAGE_DEBOARDING)
+			frappe.db.set_value("Supplier", self.vendor, {
+				"vendor_lifecycle_stage": VENDOR_LIFECYCLE_STAGE_DEBOARDING,
+				"vendor_lifecycle_status": "Deboarding Initiated",
+			})
 		self._notify_approved()
 
 	@frappe.whitelist()

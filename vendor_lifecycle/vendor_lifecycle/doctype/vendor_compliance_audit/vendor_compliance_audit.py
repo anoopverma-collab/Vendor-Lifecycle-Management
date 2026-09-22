@@ -9,6 +9,7 @@ from frappe.model.document import Document
 from vendor_lifecycle.vendor_lifecycle.stage_sequencing import (
 	block_if_onboarding_request_stopped,
 	block_if_reboarding_completed,
+	block_if_reboarding_request_stopped,
 	enforce_sequential_cancellation,
 	enforce_sequential_creation,
 	force_override_stage,
@@ -120,6 +121,7 @@ class VendorComplianceAudit(Document):
 	def validate(self):
 		self._derive_type_flags()
 		block_if_onboarding_request_stopped(self)
+		block_if_reboarding_request_stopped(self)
 		self._clear_unused_auditor_field()
 		self._clear_facility_area_if_not_applicable()
 		self._clear_valid_scope_if_global()
@@ -771,6 +773,7 @@ class VendorComplianceAudit(Document):
 
 	def on_cancel(self):
 		block_if_onboarding_request_stopped(self)
+		block_if_reboarding_request_stopped(self)
 		enforce_sequential_cancellation(self)
 		# Unconditional, regardless of Type — compliance_audit_valid_until
 		# is described as tracking "the most recent passed and submitted

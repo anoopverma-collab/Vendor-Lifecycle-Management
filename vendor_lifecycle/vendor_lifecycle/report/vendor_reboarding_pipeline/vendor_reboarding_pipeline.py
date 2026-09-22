@@ -14,7 +14,7 @@ NOT_STARTED_FIELDS = (
 
 def execute(filters: dict | None = None):
 	columns = get_columns()
-	data = get_data()
+	data = get_data(filters)
 	return columns, data
 
 
@@ -32,7 +32,21 @@ def get_columns() -> list[dict]:
 	]
 
 
-def get_data() -> list[dict]:
+def get_data(filters: dict | None = None) -> list[dict]:
+	filters = filters or {}
+	conditions = []
+	params = {}
+	if filters.get("vendor"):
+		conditions.append("vrr.vendor = %(vendor)s")
+		params["vendor"] = filters["vendor"]
+	if filters.get("request"):
+		conditions.append("vrr.name = %(request)s")
+		params["request"] = filters["request"]
+	if filters.get("request_status"):
+		conditions.append("vrr.status = %(request_status)s")
+		params["request_status"] = filters["request_status"]
+	where_clause = f"where {' and '.join(conditions)}" if conditions else ""
+
 	# Each stage doctype is shared with onboarding (kyc-keyed) — every
 	# subquery here is scoped by reboarding_request instead, so onboarding's
 	# own history for the same vendor/kyc never leaks into this pipeline
@@ -40,7 +54,7 @@ def get_data() -> list[dict]:
 	# Pipeline's own KYC-anchored view — a stage redone during the same
 	# re-boarding run shouldn't show a stale earlier attempt.
 	rows = frappe.db.sql(
-		"""
+		f"""
 		select
 			vrr.name as request,
 			vrr.vendor,
@@ -75,8 +89,10 @@ def get_data() -> list[dict]:
 			) as sign_off_status
 		from `tabVendor Reboarding Request` vrr
 		left join `tabSupplier` s on s.name = vrr.vendor
+		{where_clause}
 		order by vrr.creation desc
 		""",
+		params,
 		as_dict=True,
 	)
 

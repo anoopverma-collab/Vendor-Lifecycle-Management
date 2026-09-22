@@ -29,15 +29,13 @@ frappe.ui.form.on("Vendor Reboarding Request", {
 		// default; this one needs the opposite, so it needs a real
 		// get_query with include_disabled, not link_filters.
 		//
-		// disabled=1 alone isn't enough either — a Supplier can be
-		// disabled mid-onboarding (a failed Background Check/Compliance
-		// Audit/Sampling Evaluation also disables it) with no relation to
-		// ever having been deboarded. vendor_lifecycle_status "Disabled"
-		// is only ever set by Vendor Deboarding Checklist's own submit —
-		// confirmed against live data, where several currently-disabled
-		// Suppliers had no such status at all.
+		// Deliberately just disabled=1 — every disabled Supplier is offered
+		// here, not only one disabled via this app's own Deboarding process
+		// (see _require_vendor_currently_disabled() server-side, which
+		// still enforces that distinction at save time regardless of what
+		// this picker offers).
 		frm.set_query("vendor", () => ({
-			filters: { disabled: 1, vendor_lifecycle_status: "Disabled", include_disabled: 1 },
+			filters: { disabled: 1, include_disabled: 1 },
 		}));
 	},
 	refresh(frm) {
@@ -131,14 +129,61 @@ frappe.ui.form.on("Vendor Reboarding Request", {
 			return;
 		}
 
+		if (frm.doc.is_stopped) {
+			frm.dashboard.set_headline_alert(
+				`<div>${__("This request has been stopped — see the Comments below for why — re-open it to resume re-boarding.")}</div>`,
+				"red"
+			);
+		}
+
 		frm.call("get_pipeline_progress").then((r) => {
 			const stages = r.message || [];
 			if (stages.length) {
 				render_pipeline_progress(stages);
 			}
+
+			// Same reasoning as Vendor Onboarding Request's own identical
+			// gating — nothing left to Stop or Re-open once Sign Off is
+			// Completed for this re-boarding run.
+			const sign_off_stage = stages.find((s) => s.label === "Sign Off");
+			const sign_off_completed = sign_off_stage && sign_off_stage.state === "Completed";
+			if (!sign_off_completed) {
+				add_stop_reopen_button(frm);
+			}
 		});
 	},
 });
+
+function add_stop_reopen_button(frm) {
+	// Anyone who can already edit this request can Stop/Re-open it — no
+	// extra role restriction, matches stop()/reopen()'s own equally
+	// unrestricted server-side check. Same mechanism as Vendor Onboarding
+	// Request's own identical button.
+	if (frm.doc.is_stopped) {
+		frm.add_custom_button(__("Re-open"), () => {
+			frappe.prompt(
+				[{ fieldname: "reason", fieldtype: "Small Text", label: __("Re-open Reason"), reqd: 1 }],
+				(values) => {
+					frm.call("reopen", { reason: values.reason }).then(() => frm.reload_doc());
+				},
+				__("Re-open This Request"),
+				__("Re-open")
+			);
+		}).addClass("btn-primary");
+		return;
+	}
+
+	frm.add_custom_button(__("Stop"), () => {
+		frappe.prompt(
+			[{ fieldname: "reason", fieldtype: "Small Text", label: __("Stop Reason"), reqd: 1 }],
+			(values) => {
+				frm.call("stop", { reason: values.reason }).then(() => frm.reload_doc());
+			},
+			__("Stop This Request"),
+			__("Stop")
+		);
+	}).addClass("btn-danger");
+}
 
 function add_reject_button(frm) {
 	// The Workflow (once active) generates its own Send for Approval/
@@ -261,6 +306,14 @@ function add_create_buttons(frm) {
 	// button's own visibility).
 	frm.call("get_reboarding_stage_info").then((r) => {
 		const info = r.message || {};
+
+		// Nothing is offered while Stopped (see
+		// block_if_reboarding_request_stopped, the real backend
+		// enforcement) — the headline alert in refresh() above already
+		// says why.
+		if (info.stopped) {
+			return;
+		}
 
 		// Purely informational (Sign-off is the last stage, nothing "next"
 		// to block) — sign_off_is_retry already means exactly "the latest

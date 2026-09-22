@@ -13,6 +13,7 @@
   "column_break_top",
   "opened_on",
   "closed_on",
+  "resolved_on",
   "attachment",
   "attachment_2",
   "resolution_rating",
@@ -75,6 +76,14 @@
    "fieldname": "closed_on",
    "fieldtype": "Datetime",
    "label": "Closed On",
+   "permlevel": 1,
+   "read_only": 1
+  },
+  {
+   "description": "Set when the ticket is first marked Resolved. Cleared if it's later Reopened.",
+   "fieldname": "resolved_on",
+   "fieldtype": "Datetime",
+   "label": "Resolved On",
    "permlevel": 1,
    "read_only": 1
   },

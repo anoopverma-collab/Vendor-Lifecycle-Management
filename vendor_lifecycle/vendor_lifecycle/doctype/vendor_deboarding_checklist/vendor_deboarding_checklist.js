@@ -203,6 +203,24 @@ frappe.ui.form.on("Vendor Deboarding Checklist", {
 	},
 
 	before_submit(frm) {
+		// Mark Deboarding as Failed bypasses the normal completion/
+		// clearance checks server-side (before_submit) too — this is its
+		// own dedicated "you sure?" in place of the ordinary flagged-item
+		// confirm below, since ticking it already implies items may be
+		// incomplete.
+		if (frm.doc.mark_as_failed) {
+			return new Promise((resolve, reject) => {
+				frappe.confirm(
+					__(
+						"This will submit the Checklist as a FAILED deboarding. The Supplier will NOT be disabled,"
+							+ " and the Vendor Lifecycle Stage will be set to Deboarding Failed. Continue?"
+					),
+					resolve,
+					reject
+				);
+			});
+		}
+
 		// Not Started / In Progress rows already hard-block submit
 		// server-side (before_submit) — this is purely a "you sure?" for
 		// the statuses that ARE allowed to submit but mean something
