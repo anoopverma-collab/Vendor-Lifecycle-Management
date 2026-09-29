@@ -25,11 +25,21 @@ def sync_standard_files():
 		if os.path.exists(path):
 			import_file_by_path(path, force=True)
 
-	# Web Forms are "is_standard" (JSON-file-owned, like a DocType or Page),
-	# but migrate's automatic module sync doesn't cover them the way it does
-	# DocType/Page/Report/Workspace — an edit to a Web Form's JSON otherwise
-	# just sits on disk forever without ever reaching the database. Force-
-	# import every one this app ships, every migrate, same as above.
+
+def sync_web_forms():
+	"""One-time only — see patches/seed_web_forms_once.py. Web Forms are
+	"is_standard" (JSON-file-owned, like a DocType or Page), but migrate's
+	automatic module sync doesn't cover them the way it does DocType/Page/
+	Report/Workspace — an edit to a Web Form's JSON otherwise just sits on
+	disk forever without ever reaching the database, so some explicit
+	import really is needed. This used to run every single migrate though
+	(same mechanism, and same bug, as the Desktop Icon/Workspace Sidebar
+	fix) — any later customization made to this app's Web Form(s) through
+	the Desk's own visual editor got silently reverted back to whatever
+	the committed file says, the very next migrate. Now only ever runs
+	once — a site's own later customization actually sticks. A brand-new
+	site still gets every Web Form this app ships installed on its first
+	migrate (patches run there too)."""
 	web_form_dir = frappe.get_app_path("vendor_lifecycle", "vendor_lifecycle", "web_form")
 	for path in glob.glob(os.path.join(web_form_dir, "*", "*.json")):
 		import_file_by_path(path, force=True)
@@ -152,8 +162,6 @@ def after_install():
 
 def after_migrate():
 	sync_standard_files()
-	backfill_supplier_compliance_audit_valid_until()
-	backfill_supplier_contract_valid_until()
 	backfill_settings_defaults()
 	rename_ndc_terminology()
 	rename_stage_in_process_terminology()
@@ -162,7 +170,6 @@ def after_migrate():
 	migrate_kyc_firm_address_to_address_line_1()
 	normalize_kyc_state_casing()
 	migrate_kyc_status_draft_to_in_progress()
-	backfill_kyc_status_from_docstatus()
 	migrate_supplier_hold_to_is_frozen()
 	remove_stale_client_script("Vendor Background Check Load Rating Template Button")
 	migrate_compliance_checks_to_child_table()
@@ -188,11 +195,9 @@ def after_migrate():
 	remove_stale_setting("minimum_average_rating")
 	remove_stale_web_form("vendor-satisfaction-survey")
 	remove_stale_setting("disable_timing")
-	migrate_is_resolvable_check_to_select()
 	remove_stale_setting("deboarding_notification_provider")
 	remove_stale_number_card("Vendors Through App")
 	backfill_ticket_resolved_on()
-	install_getting_started_sample()
 
 
 # Business Types considered "service nature", plus "Other" (too ambiguous to
@@ -373,17 +378,21 @@ def backfill_form_tour_step_positions():
 		)
 
 
-def install_getting_started_sample():
-	# _install_sample_form_tours()/backfill_form_tour_step_positions() are
-	# NOT called here - Form Tour has no committed JSON file backing it
-	# (unlike Module Onboarding/Onboarding Step below, which Frappe's own
-	# core file-sync keeps recreating from their files regardless of what
-	# runs here), so they used to re-check and recreate themselves on every
-	# migrate the same way the master data did. Moved to their own one-time
-	# patch instead (see patches/seed_form_tours_once.py).
-	_install_sample_module_onboarding()
-
-
+# install_getting_started_sample()/_install_sample_module_onboarding() used
+# to live here — they manually inserted the sample Onboarding Step/Module
+# Onboarding records "if not already there." Removed: both doctypes have
+# real committed JSON files (module_onboarding/, onboarding_step/), which
+# Frappe's own core file-sync already recreates on every migrate regardless
+# of anything in this app's own code — confirmed directly in Frappe's own
+# frappe/model/sync.py, which lists both doctypes among the ones it syncs
+# the same way it does a DocType or Report. This function was pure
+# redundant work riding alongside that.
+#
+# _install_sample_form_tours()/backfill_form_tour_step_positions() below
+# are NOT part of that same file-backed sync — Form Tour has no committed
+# JSON file backing it, so they used to re-check and recreate themselves on
+# every migrate the same way the master data did. Moved to their own
+# one-time patch instead (see patches/seed_form_tours_once.py).
 def _install_sample_form_tours():
 	# Deliberately NOT ui_tour=1 - that route-auto-triggers a tour the
 	# instant a user lands on a matching page (and keeps re-triggering on
@@ -725,110 +734,6 @@ def _install_sample_form_tours():
 		}).insert(ignore_permissions=True)
 
 
-def _install_sample_module_onboarding():
-	if not frappe.db.exists("Onboarding Step", "Vendor Lifecycle Settings Setup"):
-		frappe.get_doc({
-			"doctype": "Onboarding Step",
-			"name": "Vendor Lifecycle Settings Setup",
-			"title": "Set Up Vendor Lifecycle Settings",
-			# Deliberately plain navigation, not a Form Tour - Vendor
-			# Lifecycle Settings is a Single doctype, and Frappe's own tour
-			# engine has a real compatibility gap with Singles (the tour
-			# cancels itself before ever showing anything, traced to an
-			# extra internal navigation step Singles trigger on load that
-			# a regular doctype's form doesn't). Not something worth
-			# fighting for a light sample - just get the user there.
-			"action": "Update Settings",
-			"reference_document": "Vendor Lifecycle Settings",
-			"validate_action": 0,
-			"action_label": "Review Settings",
-			"description": "Review the default templates, mandatory checks, and email account before anything else.",
-		}).insert(ignore_permissions=True)
-
-	if not frappe.db.exists("Onboarding Step", "Vendor Onboarding Request Tour Step"):
-		frappe.get_doc({
-			"doctype": "Onboarding Step",
-			"name": "Vendor Onboarding Request Tour Step",
-			"title": "Take the Onboarding Tour",
-			# The floating "Getting Started" panel (OnboardingPanel.vue)
-			# shows action_label as each step's own button text - unlike
-			# the older block-widget renderer (onboarding_widget.js), it has
-			# no fallback to title/action if this is left blank, so it just
-			# renders empty.
-			"action_label": "Onboarding Request",
-			"action": "Show Form Tour",
-			"reference_document": "Vendor Onboarding Request",
-			"form_tour": "Vendor Onboarding Request Tour",
-			"description": "A quick walkthrough of the first form in the onboarding pipeline.",
-		}).insert(ignore_permissions=True)
-
-	if not frappe.db.exists("Onboarding Step", "Vendor KYC Tour Step"):
-		frappe.get_doc({
-			"doctype": "Onboarding Step",
-			"name": "Vendor KYC Tour Step",
-			"title": "Take the KYC Tour",
-			"action_label": "Vendor KYC",
-			"action": "Show Form Tour",
-			"reference_document": "Vendor KYC",
-			"form_tour": "Vendor KYC Tour",
-			"description": "A quick walkthrough of the KYC form - verification, firm details, address, business type, tax, and bank details.",
-		}).insert(ignore_permissions=True)
-
-	if not frappe.db.exists("Onboarding Step", "Vendor Deboarding Request Tour Step"):
-		frappe.get_doc({
-			"doctype": "Onboarding Step",
-			"name": "Vendor Deboarding Request Tour Step",
-			"title": "Take the Deboarding Request Tour",
-			"action_label": "Deboarding Request",
-			"action": "Show Form Tour",
-			"reference_document": "Vendor Deboarding Request",
-			"form_tour": "Vendor Deboarding Request Tour",
-			"description": "A quick walkthrough of the Deboarding Request form.",
-		}).insert(ignore_permissions=True)
-
-	if not frappe.db.exists("Onboarding Step", "Vendor Deboarding Checklist Tour Step"):
-		frappe.get_doc({
-			"doctype": "Onboarding Step",
-			"name": "Vendor Deboarding Checklist Tour Step",
-			"title": "Take the Deboarding Checklist Tour",
-			"action_label": "Deboarding Checklist",
-			"action": "Show Form Tour",
-			"reference_document": "Vendor Deboarding Checklist",
-			"form_tour": "Vendor Deboarding Checklist Tour",
-			"description": "A quick walkthrough of the Deboarding Checklist form.",
-		}).insert(ignore_permissions=True)
-
-	if not frappe.db.exists("Onboarding Step", "Vendor Satisfaction Survey Tour Step"):
-		frappe.get_doc({
-			"doctype": "Onboarding Step",
-			"name": "Vendor Satisfaction Survey Tour Step",
-			"title": "Take the Satisfaction Survey Tour",
-			"action_label": "Satisfaction Survey",
-			"action": "Show Form Tour",
-			"reference_document": "Vendor Satisfaction Survey",
-			"form_tour": "Vendor Satisfaction Survey Tour",
-			"description": "A quick walkthrough of the Satisfaction Survey form.",
-		}).insert(ignore_permissions=True)
-
-	if frappe.db.exists("Module Onboarding", "Vendor Lifecycle Onboarding"):
-		return
-	frappe.get_doc({
-		"doctype": "Module Onboarding",
-		"name": "Vendor Lifecycle Onboarding",
-		"title": "Vendor Lifecycle Setup",
-		"module": "Vendor Lifecycle",
-		"allow_roles": [{"role": "Vendor Lifecycle Manager"}],
-		"steps": [
-			{"step": "Vendor Onboarding Request Tour Step"},
-			{"step": "Vendor KYC Tour Step"},
-			{"step": "Vendor Deboarding Request Tour Step"},
-			{"step": "Vendor Deboarding Checklist Tour Step"},
-			{"step": "Vendor Satisfaction Survey Tour Step"},
-			{"step": "Vendor Lifecycle Settings Setup"},
-		],
-	}).insert(ignore_permissions=True)
-
-
 # All Client Script logic in this app was moved into real, committed .js
 # files (doctype .js/_list.js files, and Supplier's via doctype_js/
 # doctype_list_js in hooks.py) — Client Script is editable/disable-able by
@@ -1011,32 +916,6 @@ def migrate_kyc_status_draft_to_in_progress():
 	""")
 
 
-def backfill_kyc_status_from_docstatus():
-	# migrate_kyc_status_draft_to_in_progress() above only ever caught
-	# records still carrying the old "Draft" label — the actual root
-	# cause (on_submit()/on_cancel() setting self.status via a bare
-	# assignment, which happens after Frappe has already written the
-	# document to the database for that request and so never actually
-	# persists) was never fixed at the code level until now, so any KYC
-	# submitted or cancelled *after* that migration ran kept getting
-	# stuck showing whatever the current default ("In Progress") already
-	# was — indistinguishable from "never changed" — rather than "Draft".
-	# Catches every remaining straggler directly from docstatus instead
-	# of matching a specific stale label. "Verified" was later renamed to
-	# "Approved", and "Cancelled" became its own real status instead of a
-	# bounce back to "In Progress" once the Vendor KYC Workflow was added
-	# — this backfill's targets follow both renames so it still writes a
-	# currently-valid option if it ever needs to run again.
-	frappe.db.sql("""
-		update `tabVendor KYC` set status = 'Approved'
-		where docstatus = 1 and status != 'Approved'
-	""")
-	frappe.db.sql("""
-		update `tabVendor KYC` set status = 'Cancelled'
-		where docstatus = 2 and status != 'Cancelled'
-	""")
-
-
 # Vendor KYC's own status field (see vendor_kyc.json) drives, and is driven
 # by, this Workflow. A Vendor Lifecycle User does the actual KYC work and
 # submits it for review ("Send for Approval": In Progress -> Approval
@@ -1205,28 +1084,26 @@ def install_vendor_reboarding_request_workflow():
 	)
 
 
+# This function used to also convert on_hold=1 to is_frozen=1 for any
+# vendor_kyc-linked Supplier (the onboarding freeze mechanism's own,
+# one-time transition off the old on_hold/hold_type fields, long since
+# complete on every site). Removed: on_hold is still a live, unrestricted
+# core ERPNext field a staff member can set on any Supplier — including one
+# of ours — for a completely unrelated reason (e.g. a payment dispute).
+# Running that conversion on every migrate meant a real, current, unrelated
+# hold got silently reinterpreted as a vendor-lifecycle freeze the next
+# time anyone migrated.
 def migrate_supplier_hold_to_is_frozen():
 	# Suppliers created before the vendor_kyc backlink field existed never
 	# got it backfilled — without it, the read_only_depends_on Property
 	# Setter on Supplier.is_frozen wouldn't recognize them as vendor-
 	# lifecycle Suppliers at all. Backfill from Vendor KYC's own (older)
-	# `supplier` field first, so the fix below actually reaches them too.
+	# `supplier` field first.
 	frappe.db.sql("""
 		update `tabSupplier` s
 		inner join `tabVendor KYC` k on k.supplier = s.name
 		set s.vendor_kyc = k.name
 		where (s.vendor_kyc is null or s.vendor_kyc = '')
-	""")
-
-	# The onboarding freeze switched from on_hold/hold_type ("Block
-	# Supplier" — narrow, only some transaction types) to is_frozen (core
-	# ERPNext's broader, centrally-enforced party freeze). Only touches
-	# Suppliers this app itself created (vendor_kyc set) that are still on
-	# the old mechanism — a Supplier a real user separately put on hold for
-	# an unrelated reason is left alone.
-	frappe.db.sql("""
-		update `tabSupplier` set is_frozen = 1, on_hold = 0, hold_type = ''
-		where vendor_kyc is not null and vendor_kyc != '' and on_hold = 1
 	""")
 
 
@@ -1358,68 +1235,15 @@ SETTINGS_FIELD_DEFAULTS = {
 }
 
 
-def backfill_supplier_compliance_audit_valid_until():
-	# New Supplier-level mirror of "when does this vendor's Compliance
-	# Audit currently expire" — every Supplier that already has a Passed,
-	# submitted Compliance Audit on file (onboarding, re-boarding, or
-	# Renewal — whichever is most recent) gets it backfilled once. Only
-	# ever fills in a currently-blank compliance_audit_valid_until.
-	rows = frappe.db.sql(
-		"""
-		select vca.vendor, vca.valid_until
-		from `tabVendor Compliance Audit` vca
-		inner join (
-			select vendor, max(audit_date) as latest_audit_date
-			from `tabVendor Compliance Audit`
-			where docstatus = 1 and outcome = 'Passed' and vendor is not null and vendor != ''
-			group by vendor
-		) latest on latest.vendor = vca.vendor and latest.latest_audit_date = vca.audit_date
-		where vca.docstatus = 1 and vca.outcome = 'Passed'
-		""",
-		as_dict=True,
-	)
-	for row in rows:
-		if not row.valid_until:
-			continue
-		current = frappe.db.get_value("Supplier", row.vendor, "compliance_audit_valid_until")
-		if not current:
-			frappe.db.set_value(
-				"Supplier", row.vendor, "compliance_audit_valid_until", row.valid_until, update_modified=False
-			)
-
-
-def backfill_supplier_contract_valid_until():
-	# New Supplier-level mirror of "when does this vendor's contract
-	# currently expire" — every Supplier that already has a Passed,
-	# submitted Sign Off on file (onboarding, re-boarding, or Renewal —
-	# whichever is most recent) gets it backfilled once, if that Sign Off
-	# happens to have a Contract Validity on it. Only ever fills in a
-	# currently-blank contract_valid_until. Sign Off has no business-date
-	# field of its own (unlike Compliance Audit's audit_date), so "most
-	# recent" is by creation — same tie-breaker already used by this
-	# doctype's own on_cancel revert logic.
-	rows = frappe.db.sql(
-		"""
-		select vso.vendor, vso.contract_validity
-		from `tabVendor Sign Off` vso
-		inner join (
-			select vendor, max(creation) as latest_creation
-			from `tabVendor Sign Off`
-			where docstatus = 1 and sign_off_failed = 0 and vendor is not null and vendor != ''
-			group by vendor
-		) latest on latest.vendor = vso.vendor and latest.latest_creation = vso.creation
-		where vso.docstatus = 1 and vso.sign_off_failed = 0
-		""",
-		as_dict=True,
-	)
-	for row in rows:
-		if not row.contract_validity:
-			continue
-		current = frappe.db.get_value("Supplier", row.vendor, "contract_valid_until")
-		if not current:
-			frappe.db.set_value(
-				"Supplier", row.vendor, "contract_valid_until", row.contract_validity, update_modified=False
-			)
+# backfill_supplier_compliance_audit_valid_until() / backfill_supplier_
+# contract_valid_until() used to live here — one-time mirrors of "when
+# does this vendor's Compliance Audit/contract currently expire" onto the
+# Supplier, for any vendor that already had a Passed record before these
+# Supplier-level fields existed. Removed: every stage doctype that can set
+# either field already pushes it directly on submit going forward (and
+# each backfill only ever filled a currently-blank field), so nothing
+# running today can still leave one of these blank — running this on
+# every migrate was pure repeated work over already-settled data.
 
 
 def backfill_settings_defaults():
@@ -2512,23 +2336,11 @@ def backfill_default_reboarding_request_creator_email_templates():
 		}).insert(ignore_permissions=True)
 
 
-def migrate_is_resolvable_check_to_select():
-	# is_resolvable was a plain Check (0/1); it's now a mandatory Select
-	# (Yes/No/Maybe) so a value has to be a deliberate choice, not a silent
-	# default. The old boolean column just becomes varchar in place, so
-	# existing rows are left holding the literal strings "0"/"1" — neither
-	# is a valid option. "1" maps to "Yes"; "0" is cleared to blank rather
-	# than mapped to "No", since it was never a deliberate answer (it was
-	# every row's untouched default).
-	rows = frappe.db.sql(
-		"select name, is_resolvable from `tabVendor Deboarding Request` where is_resolvable in ('0', '1')",
-		as_dict=True,
-	)
-	for row in rows:
-		frappe.db.set_value(
-			"Vendor Deboarding Request", row.name, "is_resolvable", "Yes" if row.is_resolvable == "1" else ""
-		)
-
+# migrate_is_resolvable_check_to_select() used to live here — a one-time
+# conversion of is_resolvable from a plain Check (0/1) to today's mandatory
+# Select (Yes/No/Maybe), for any row still holding the old literal "0"/"1"
+# strings. Removed: the field has been a Select for a while now, and
+# nothing currently writing to it can produce those old values again.
 
 DEFAULT_DEBOARDING_CHECKLIST_TEMPLATE = "Default Deboarding Checklist"
 DEFAULT_DEBOARDING_CHECKLIST_ITEMS = [
