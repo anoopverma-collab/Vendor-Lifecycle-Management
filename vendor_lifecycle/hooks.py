@@ -224,25 +224,13 @@ has_permission = {
 # ---------------
 # Hook on document methods and events
 
+# No doc_events on Purchase Order / RFQ / Purchase Invoice / Purchase Receipt /
+# Journal Entry / Payment Entry: a disabled (deboarded) Supplier is already
+# fully blocked on all of them by ERPNext's own
+# erpnext.accounts.party.validate_party_frozen_disabled (at validate for the
+# buying documents, at GL Entry for JE/PE). Final dues are settled through the
+# Deboarding Checklist's "Temporarily Enable Supplier" instead.
 doc_events = {
-	"Purchase Order": {
-		"validate": "vendor_lifecycle.vendor_lifecycle.deboarding_guard.block_disabled_supplier_on_order",
-	},
-	"Request for Quotation": {
-		"validate": "vendor_lifecycle.vendor_lifecycle.deboarding_guard.block_disabled_supplier_on_order",
-	},
-	"Purchase Invoice": {
-		"validate": "vendor_lifecycle.vendor_lifecycle.deboarding_guard.warn_disabled_supplier_on_transaction",
-	},
-	"Purchase Receipt": {
-		"validate": "vendor_lifecycle.vendor_lifecycle.deboarding_guard.warn_disabled_supplier_on_transaction",
-	},
-	"Journal Entry": {
-		"validate": "vendor_lifecycle.vendor_lifecycle.deboarding_guard.warn_disabled_supplier_on_transaction",
-	},
-	"Payment Entry": {
-		"validate": "vendor_lifecycle.vendor_lifecycle.deboarding_guard.warn_disabled_supplier_on_transaction",
-	},
 	"Supplier": {
 		"validate": "vendor_lifecycle.vendor_lifecycle.vendor_creation.validate_supplier_vendor_kyc",
 		"onload": "vendor_lifecycle.vendor_lifecycle.vendor_creation.set_supplier_disable_reason_onload",
