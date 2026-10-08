@@ -916,6 +916,52 @@ def notify_manual_attach_needed(doctype, name, owner, reason):
 
 
 def _notify_manual_attach_needed_unsafe(doctype, name, owner, reason):
+	_send_internal_document_email(
+		doctype,
+		name,
+		owner,
+		DEFAULT_MANUAL_ATTACH_NEEDED_EMAIL_TEMPLATE,
+		{
+			"doctype_label": doctype,
+			"document_name": name,
+			"document_link": frappe.utils.get_url_to_form(doctype, name),
+			"reason": reason,
+		},
+	)
+
+
+DEFAULT_ATTACHMENT_SAVE_FAILED_EMAIL_TEMPLATE = "Vendor Lifecycle Attachment Save Failed"
+
+
+def notify_attachment_save_failed(doctype, name, owner, context):
+	"""Sent by reply_attach_guard.py — saving an inbound reply's file onto
+	the document raised an error and was rolled back. `context` carries
+	error_log_name/error_log_link (empty if logging itself failed), sender,
+	received_on and will_retry. Best-effort, same as
+	notify_manual_attach_needed()."""
+	try:
+		_send_internal_document_email(
+			doctype,
+			name,
+			owner,
+			DEFAULT_ATTACHMENT_SAVE_FAILED_EMAIL_TEMPLATE,
+			{
+				"doctype_label": doctype,
+				"document_name": name,
+				"document_link": frappe.utils.get_url_to_form(doctype, name),
+				**context,
+			},
+		)
+	except Exception:
+		frappe.log_error(
+			title=f"{doctype}: failed to send attachment-save-failed email", message=frappe.get_traceback()
+		)
+
+
+def _send_internal_document_email(doctype, name, owner, template_name, context):
+	"""Internal (staff-facing) email about one document — to its Creator,
+	CC'd to the Vendor Lifecycle Manager role and Settings' Always CC.
+	Shared by the manual-attach-needed and attachment-save-failed emails."""
 	creator_email = frappe.db.get_value("User", owner, "email") or owner
 	if not creator_email:
 		return
@@ -926,19 +972,13 @@ def _notify_manual_attach_needed_unsafe(doctype, name, owner, reason):
 	# directly, below) — so the caller's own per-doctype switch (Sign Off's
 	# or Deboarding Checklist's, whichever this notification is about) has
 	# to be checked explicitly here too.
-	if not vendor_lifecycle_doctype_email_enabled(doctype, DEFAULT_MANUAL_ATTACH_NEEDED_EMAIL_TEMPLATE, settings):
+	if not vendor_lifecycle_doctype_email_enabled(doctype, template_name, settings):
 		return
-	if not frappe.db.exists("Email Template", DEFAULT_MANUAL_ATTACH_NEEDED_EMAIL_TEMPLATE):
+	if not frappe.db.exists("Email Template", template_name):
 		return
 	cc = vendor_lifecycle_cc_list(settings)
 
-	template = frappe.get_doc("Email Template", DEFAULT_MANUAL_ATTACH_NEEDED_EMAIL_TEMPLATE)
-	context = {
-		"doctype_label": doctype,
-		"document_name": name,
-		"document_link": frappe.utils.get_url_to_form(doctype, name),
-		"reason": reason,
-	}
+	template = frappe.get_doc("Email Template", template_name)
 	subject = template.get_formatted_subject(context)
 	message = template.get_formatted_response(context)
 

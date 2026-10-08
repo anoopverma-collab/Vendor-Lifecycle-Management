@@ -2530,6 +2530,45 @@ def backfill_default_manual_attach_needed_email_template():
 		}).insert(ignore_permissions=True)
 
 
+DEFAULT_ATTACHMENT_SAVE_FAILED_EMAIL_TEMPLATE = "Vendor Lifecycle Attachment Save Failed"
+
+
+def backfill_default_attachment_save_failed_email_template():
+	# Sent by reply_attach_guard.py — an inbound reply was matched and
+	# verified, but saving its file onto the document raised an error, so
+	# everything was rolled back. Sent on the first failure (a retry is
+	# queued) and again if the one retry also fails (attach manually).
+	if not frappe.db.exists("Email Template", DEFAULT_ATTACHMENT_SAVE_FAILED_EMAIL_TEMPLATE):
+		body = (
+			"<p>Hello,</p>"
+			"<p>An email reply came in for {{ doctype_label }} <b>{{ document_name }}</b>, but there was an"
+			" error while saving its file onto the document, so nothing was attached.</p>"
+			+ _info_box(
+				VENDOR_LIFECYCLE_INTERNAL_ACCENT,
+				"Document: {{ doctype_label }} {{ document_name }}<br>"
+				"{% if error_log_name %}Error Log: <a href=\"{{ error_log_link }}\">{{ error_log_name }}</a>"
+				"{% else %}Error Log: the error could not be logged{% endif %}<br>"
+				"Reply from: {{ sender }}<br>"
+				"Received on: {{ received_on }}",
+			)
+			+ "{% if will_retry %}"
+			"<p>The system will retry once automatically. If the retry also fails you will get another"
+			" email, and the file must then be attached manually.</p>"
+			"{% else %}"
+			'<p><a href="{{ document_link }}">Open the document</a> and attach the file manually from the'
+			" vendor's reply in its timeline.</p>"
+			"{% endif %}"
+		)
+		frappe.get_doc({
+			"doctype": "Email Template",
+			"name": DEFAULT_ATTACHMENT_SAVE_FAILED_EMAIL_TEMPLATE,
+			"subject": "Attachment Save Failed — {{ doctype_label }} {{ document_name }}",
+			"response": _signoff_email_shell(
+				VENDOR_LIFECYCLE_INTERNAL_ACCENT, "Action Needed", "Attachment Save Failed", body
+			),
+		}).insert(ignore_permissions=True)
+
+
 DEFAULT_COMPLIANCE_AUDIT_RENEWAL_DUE_EMAIL_TEMPLATE = "Compliance Audit Renewal Due"
 DEFAULT_COMPLIANCE_AUDIT_RENEWAL_DRAFT_REMINDER_EMAIL_TEMPLATE = "Compliance Audit Renewal Draft Reminder"
 

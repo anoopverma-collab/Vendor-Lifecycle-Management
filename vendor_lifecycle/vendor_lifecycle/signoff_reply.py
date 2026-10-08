@@ -31,6 +31,7 @@ is defensive and logs rather than raises.
 
 import frappe
 
+from vendor_lifecycle.vendor_lifecycle.reply_attach_guard import run_reply_handler
 from vendor_lifecycle.vendor_lifecycle.vendor_creation import notify_manual_attach_needed
 
 DOCUMENT_TYPE_FIELD = {
@@ -40,13 +41,9 @@ DOCUMENT_TYPE_FIELD = {
 
 
 def handle_signoff_reply(doc, method=None):
-	try:
-		_handle_signoff_reply(doc)
-	except Exception:
-		frappe.log_error(
-			title="Vendor Sign Off: failed to process inbound reply",
-			message=frappe.get_traceback(),
-		)
+	# All-or-nothing, with Error Log + Creator email + one retry on
+	# failure — see reply_attach_guard.py.
+	run_reply_handler("signoff", doc)
 
 
 def _handle_signoff_reply(doc):

@@ -28,17 +28,14 @@ site, so every path below is defensive and logs rather than raises.
 
 import frappe
 
+from vendor_lifecycle.vendor_lifecycle.reply_attach_guard import run_reply_handler
 from vendor_lifecycle.vendor_lifecycle.vendor_creation import notify_manual_attach_needed
 
 
 def handle_checklist_clearance_reply(doc, method=None):
-	try:
-		_handle_checklist_clearance_reply(doc)
-	except Exception:
-		frappe.log_error(
-			title="Vendor Deboarding Checklist: failed to process inbound clearance reply",
-			message=frappe.get_traceback(),
-		)
+	# All-or-nothing, with Error Log + Creator email + one retry on
+	# failure — see reply_attach_guard.py.
+	run_reply_handler("clearance", doc)
 
 
 def _handle_checklist_clearance_reply(doc):
