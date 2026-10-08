@@ -26,6 +26,7 @@ from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
 	VENDOR_LIFECYCLE_STATUS_SIGN_OFF_IN_PROGRESS,
 	get_disable_reason_for_supplier,
 	get_failed_stage_reason,
+	get_supplier_contact_email,
 	mark_vendor_status_in_progress,
 	require_kyc_unless_reboarding,
 	require_vendor_lifecycle_email_account,
@@ -63,6 +64,7 @@ class VendorSignOff(Document):
 		block_if_reboarding_request_stopped(self)
 		sync_vendor_field(self)
 		sync_onboarding_request_field(self)
+		self._resolve_supplier_email_without_kyc()
 		require_kyc_unless_reboarding(self)
 		enforce_sequential_creation(self)
 		self._warn_if_no_default_company()
@@ -81,6 +83,31 @@ class VendorSignOff(Document):
 		# Vendor Compliance Audit's own identical method.
 		self.is_reboarding = 1 if self.signoff_type == "Reboarding" else 0
 		self.is_renewal = 1 if self.signoff_type == "Renewal" else 0
+
+	def _resolve_supplier_email_without_kyc(self):
+		# supplier_email's own fetch_from only reads kyc.official_email — but
+		# a Reboarding or Renewal Sign Off has no kyc of its own (and a
+		# vendor onboarded before this app existed has no KYC at all), which
+		# left it blank and hid the "Send Email" button.
+		if self.supplier_email:
+			return
+		if self.is_reboarding and self.reboarding_request:
+			# The Reboarding Request already resolved the vendor's current
+			# contact email (Supplier's primary Contact first, KYC fallback).
+			self.supplier_email = frappe.db.get_value(
+				"Vendor Reboarding Request", self.reboarding_request, "official_email"
+			)
+		elif self.is_renewal and self.vendor:
+			self.supplier_email = _current_supplier_email(self.vendor)
+
+	def _signoff_recipients(self):
+		# Supplier Email and Additional Email, whichever are set — either one
+		# alone is enough to send the Sign-off email and its follow-ups.
+		recipients = []
+		for email in (self.supplier_email, self.additional_email):
+			if email and email not in recipients:
+				recipients.append(email)
+		return recipients
 
 	def _require_failure_reason_if_failed(self):
 		# failure_reason's own mandatory_depends_on is client-side only —
@@ -348,8 +375,8 @@ class VendorSignOff(Document):
 			frappe.throw(frappe._("The Sign-off email can only be sent while this document is a draft."))
 		if self.sign_off_failed:
 			frappe.throw(frappe._("The Sign-off email cannot be sent once this Sign-off is marked as failed."))
-		if not self.supplier_email:
-			frappe.throw(frappe._("No Supplier Email is set on this Vendor KYC — nothing to send to."))
+		if not self._signoff_recipients():
+			frappe.throw(frappe._("Set a Supplier Email or an Additional Email first — nothing to send to."))
 		if not self.contract:
 			frappe.throw(frappe._("Attach the Contract before sending the email."))
 		if self.code_of_conduct_acknowledged and not self.code_of_conduct:
@@ -379,9 +406,7 @@ class VendorSignOff(Document):
 
 		cc = vendor_lifecycle_cc_list(settings)
 
-		recipients = [self.supplier_email]
-		if self.additional_email and self.additional_email not in recipients:
-			recipients.append(self.additional_email)
+		recipients = self._signoff_recipients()
 
 		document_jobs = [("Contract", "contract")]
 		if self.code_of_conduct_acknowledged:
@@ -430,12 +455,9 @@ class VendorSignOff(Document):
 			return False
 		if not frappe.db.exists("Email Template", DEFAULT_SIGNOFF_FOLLOWUP_EMAIL_TEMPLATE):
 			return False
-		if not self.supplier_email:
+		recipients = self._signoff_recipients()
+		if not recipients:
 			return False
-
-		recipients = [self.supplier_email]
-		if self.additional_email and self.additional_email not in recipients:
-			recipients.append(self.additional_email)
 
 		context = self._build_email_context()
 		context["missing_documents"] = ", ".join(self._missing_documents())
@@ -463,7 +485,7 @@ class VendorSignOff(Document):
 			frappe.throw(
 				frappe._(
 					"Could not send — check Vendor Lifecycle Settings (emails enabled, the Email Template, and"
-					" the Supplier Email)."
+					" a Supplier Email or Additional Email)."
 				)
 			)
 		return {"sent": True}
@@ -977,3 +999,12 @@ class VendorSignOff(Document):
 			# at Supplier creation), so there's nothing to restore here.
 			update["is_frozen"] = 1
 		frappe.db.set_value("Supplier", self.vendor, update)
+
+
+def _current_supplier_email(supplier):
+	"""The vendor's current contact email — the Supplier's default Contact
+	first (same resolution Vendor Reboarding Request uses), falling back to
+	its latest submitted KYC's official_email."""
+	return get_supplier_contact_email(supplier) or frappe.db.get_value(
+		"Vendor KYC", {"supplier": supplier, "docstatus": 1}, "official_email", order_by="creation desc"
+	)

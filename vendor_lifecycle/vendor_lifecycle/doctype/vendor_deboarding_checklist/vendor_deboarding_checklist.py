@@ -13,6 +13,7 @@ from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
 	VENDOR_LIFECYCLE_STAGE_DEBOARDED,
 	VENDOR_LIFECYCLE_STAGE_DEBOARDING_FAILED,
 	get_kyc_vendor_contact,
+	get_supplier_contact_email,
 	require_vendor_lifecycle_email_account,
 	resolve_settled_active_stage,
 	send_vendor_lifecycle_email,
@@ -330,16 +331,19 @@ class VendorDeboardingChecklist(Document):
 		return get_kyc_vendor_contact(kyc) if kyc else {}
 
 	def _clearance_recipients(self):
-		# Three possible sources, in order: the KYC's own Official Email,
-		# the Supplier's Primary Contact (email_id, kept in sync by
-		# ERPNext core whenever a Contact is set as primary), and whatever
-		# was typed into Additional Email. Any of the three can be blank,
-		# and two or more can legitimately hold the same address — compare
-		# case-insensitively so a repeated address is only ever added once.
+		# Four possible sources, in order: the KYC's own Official Email,
+		# the Supplier's own email_id (only filled when a Primary Contact is
+		# picked on the Supplier form), the email of the Contact actually
+		# linked to the Supplier as primary (covers older suppliers whose
+		# email_id was never filled), and whatever was typed into
+		# Additional Email. Any of them can be blank, and two or more can
+		# legitimately hold the same address — compare case-insensitively
+		# so a repeated address is only ever added once.
 		contact = self.vendor_contact()
 		candidates = [
 			contact.get("official_email"),
 			frappe.db.get_value("Supplier", self.supplier, "email_id") if self.supplier else None,
+			get_supplier_contact_email(self.supplier),
 			self.additional_email,
 		]
 

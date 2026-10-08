@@ -993,3 +993,45 @@ def _send_internal_document_email(doctype, name, owner, template_name, context):
 		cc=", ".join(cc) if cc else None,
 		send_email=True,
 	)
+
+
+def phone_with_country_code(number, country=None):
+	"""Return `number` in Frappe's strict Phone format ("+91-9876543210"),
+	or None if it can't be made valid.
+
+	Contact's own mobile_no/phone are free text, so legacy numbers are often
+	saved with no country code — which a Phone fieldtype rejects outright
+	("Country Code Required"). A number without a leading "+" gets the dial
+	code of `country` (falling back to System Settings' country) prefixed;
+	the result is only returned if phonenumbers considers it valid."""
+	from phonenumbers import NumberParseException, country_code_for_region, is_valid_number, parse
+
+	number = (number or "").strip()
+	if not number:
+		return None
+
+	if not number.startswith("+"):
+		country = country or frappe.db.get_single_value("System Settings", "country")
+		region = frappe.db.get_value("Country", country, "code") if country else None
+		dial_code = country_code_for_region(region.upper()) if region else 0
+		if not dial_code:
+			return None
+		digits = "".join(ch for ch in number if ch.isdigit()).lstrip("0")
+		number = f"+{dial_code}-{digits}"
+
+	try:
+		return number if is_valid_number(parse(number)) else None
+	except NumberParseException:
+		return None
+
+
+def get_supplier_contact_email(supplier):
+	"""Email of the Supplier's primary Contact, resolved the way core Frappe
+	does (get_default_contact: the linked Contact marked Is Primary Contact,
+	else any linked Contact) — not Supplier.email_id, which ERPNext only
+	fills when supplier_primary_contact is picked on the Supplier form and
+	so is often blank for older suppliers."""
+	from frappe.contacts.doctype.contact.contact import get_default_contact
+
+	contact_name = get_default_contact("Supplier", supplier) if supplier else None
+	return frappe.db.get_value("Contact", contact_name, "email_id") if contact_name else None

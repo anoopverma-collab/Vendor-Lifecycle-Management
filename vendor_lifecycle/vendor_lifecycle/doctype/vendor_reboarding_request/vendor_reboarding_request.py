@@ -12,6 +12,7 @@ from vendor_lifecycle.vendor_lifecycle.vendor_creation import (
 	VENDOR_LIFECYCLE_STAGE_ONBOARDING_FAILED,
 	VENDOR_LIFECYCLE_STAGE_REBOARDED,
 	VENDOR_LIFECYCLE_STAGE_REBOARDING,
+	phone_with_country_code,
 	resolve_vendor_lifecycle_company_name,
 	send_vendor_lifecycle_email,
 )
@@ -159,8 +160,16 @@ class VendorReboardingRequest(Document):
 			)
 			if contact:
 				self.contact_person_name = " ".join(filter(None, [contact.first_name, contact.last_name]))
-				if contact.mobile_no or contact.phone:
-					self.contact_person_number = contact.mobile_no or contact.phone
+				# Contact's own number is free text (often saved with no
+				# country code), but contact_person_number is a strict
+				# Phone field — normalize it, and fall back to the KYC
+				# value rather than block the save if it still isn't valid.
+				number = phone_with_country_code(
+					contact.mobile_no or contact.phone,
+					frappe.db.get_value("Supplier", self.vendor, "country"),
+				)
+				if number:
+					self.contact_person_number = number
 				if contact.email_id:
 					self.official_email = contact.email_id
 

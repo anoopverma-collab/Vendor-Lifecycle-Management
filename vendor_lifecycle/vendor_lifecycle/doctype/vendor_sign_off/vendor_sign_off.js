@@ -114,10 +114,17 @@ frappe.ui.form.on("Vendor Sign Off", {
 			});
 		}
 
-		// Only offered once there's something to send to, only while this
-		// is still a draft, and never once marked failed — matches
+		// Only offered once there's something to send to (Supplier Email or
+		// Additional Email — either alone is enough), only while this is
+		// still a draft, and never once marked failed — matches
 		// send_signoff_email()'s own server-side guards.
-		if (!frm.is_new() && frm.doc.docstatus === 0 && frm.doc.supplier_email && !frm.doc.sign_off_failed) {
+		const has_recipient = Boolean(frm.doc.supplier_email || frm.doc.additional_email);
+		// Supplier Email blank means the vendor's own address isn't on it —
+		// say so before sending, so it isn't mistaken for reaching the vendor.
+		const only_additional_note = frm.doc.supplier_email
+			? ""
+			: "<br><br>" + __("Note: no Supplier Email is set — this goes only to the Additional Email.");
+		if (!frm.is_new() && frm.doc.docstatus === 0 && has_recipient && !frm.doc.sign_off_failed) {
 			frm.add_custom_button(__("Send Email"), () => {
 				const recipients = [frm.doc.supplier_email, frm.doc.additional_email].filter(Boolean).join(", ");
 				// Nothing server-side stops this being sent more than once —
@@ -131,7 +138,7 @@ frappe.ui.form.on("Vendor Sign Off", {
 							recipients,
 					  ])
 					: __("Send the Sign-off email to {0}?", [recipients]);
-				frappe.confirm(message, () => {
+				frappe.confirm(message + only_additional_note, () => {
 					frm.call("send_signoff_email").then((r) => {
 						if (r.message) {
 							frappe.msgprint({
@@ -152,6 +159,7 @@ frappe.ui.form.on("Vendor Sign Off", {
 			!frm.is_new()
 			&& frm.doc.docstatus === 0
 			&& !frm.doc.sign_off_failed
+			&& has_recipient
 			&& frm.doc.last_reminder_sent
 			&& (!frm.doc.signed_contract || (frm.doc.code_of_conduct_acknowledged && !frm.doc.code_of_conduct_document))
 		) {
@@ -160,7 +168,9 @@ frappe.ui.form.on("Vendor Sign Off", {
 					frm.doc.last_reminder_sent === frappe.datetime.get_today()
 						? __("A Sign-off email was already sent today — send another follow-up anyway?")
 						: __("Send a follow-up reminder about the still-missing signed document(s)?");
-				frappe.confirm(message, () => frm.call("send_signoff_followup").then(() => frm.reload_doc()));
+				frappe.confirm(message + only_additional_note, () =>
+					frm.call("send_signoff_followup").then(() => frm.reload_doc())
+				);
 			});
 		}
 	},
