@@ -1,0 +1,38 @@
+{
+ "cards": [
+  {
+   "card": "Draft Reboarding Requests"
+  },
+  {
+   "card": "Rejected Reboarding Requests"
+  },
+  {
+   "card": "Pending Reboarding Sign Offs"
+  },
+  {
+   "card": "Reboarded Vendors"
+  }
+ ],
+ "charts": [
+  {
+   "chart": "Reboarding Requests Trend",
+   "width": "Full"
+  },
+  {
+   "chart": "Reboarding Requests by Status",
+   "width": "Full"
+  }
+ ],
+ "creation": "2026-09-19 21:00:00.000000",
+ "dashboard_name": "Vendor Reboarding",
+ "docstatus": 0,
+ "doctype": "Dashboard",
+ "idx": 0,
+ "is_default": 0,
+ "is_standard": 1,
+ "modified": "2026-09-20 17:30:00.000000",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "Vendor Reboarding",
+ "owner": "Administrator"
+}

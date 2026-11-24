@@ -1,0 +1,32 @@
+{
+ "actions": [],
+ "creation": "2026-08-24 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "insurance_type"
+ ],
+ "fields": [
+  {
+   "fieldname": "insurance_type",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Insurance Type",
+   "options": "Insurance Type",
+   "link_filters": "[[\"Insurance Type\",\"disabled\",\"=\",0]]",
+   "reqd": 1
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-27 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "Insurance Template Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

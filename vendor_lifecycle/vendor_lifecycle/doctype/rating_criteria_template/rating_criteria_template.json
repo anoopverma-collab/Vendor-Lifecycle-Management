@@ -1,5 +1,6 @@
 {
  "actions": [],
+ "allow_import": 1,
  "allow_rename": 1,
  "autoname": "field:template_name",
  "creation": "2026-08-06 10:00:00.000000",
@@ -10,7 +11,10 @@
   "template_name",
   "description",
   "disabled",
+  "result_method",
+  "column_break_template_result_method",
   "minimum_average_rating",
+  "section_break_template_criteria",
   "criteria"
  ],
  "fields": [
@@ -33,11 +37,28 @@
    "label": "Disabled"
   },
   {
-   "description": "Minimum average rating (out of 5) a Vendor Reference Check using this template must reach to Pass. Leave blank to fall back to the value set in Vendor Lifecycle Settings.",
+   "description": "How a Reference using this template combines its own multiple Ratings into its Result. Leave blank to fall back to the value set in Vendor Lifecycle Settings for both this and Minimum Average Rating.",
+   "fieldname": "result_method",
+   "fieldtype": "Select",
+   "label": "Result Method",
+   "options": "\nAverage\nEach Criteria Must Pass\nMajority of Criteria"
+  },
+  {
+   "fieldname": "column_break_template_result_method",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.result_method",
+   "description": "1 to 5, up to 1 decimal. Only used (and shown) when Result Method above is set — automatically cleared to 0 otherwise, falling back to Vendor Lifecycle Settings for both.",
    "fieldname": "minimum_average_rating",
    "fieldtype": "Float",
    "label": "Minimum Average Rating",
-   "non_negative": 1
+   "non_negative": 1,
+   "precision": "1"
+  },
+  {
+   "fieldname": "section_break_template_criteria",
+   "fieldtype": "Section Break"
   },
   {
    "fieldname": "criteria",

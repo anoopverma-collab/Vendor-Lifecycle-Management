@@ -1,0 +1,13 @@
+{
+ "creation": "2026-10-14 12:00:00.000000",
+ "docstatus": 0,
+ "doctype": "Dashboard Chart Source",
+ "idx": 0,
+ "modified": "2026-10-14 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "Satisfaction Score by Criterion",
+ "owner": "Administrator",
+ "source_name": "Satisfaction Score by Criterion",
+ "timeseries": 0
+}

@@ -1,0 +1,41 @@
+{
+ "cards": [
+  {
+   "card": "Completed Surveys (12 Months)"
+  },
+  {
+   "card": "Survey Response Rate (12 Months)"
+  },
+  {
+   "card": "Average Satisfaction Score (12 Months)"
+  },
+  {
+   "card": "Draft Satisfaction Surveys"
+  },
+  {
+   "card": "Overdue Satisfaction Surveys"
+  }
+ ],
+ "charts": [
+  {
+   "chart": "Satisfaction Surveys by Status",
+   "width": "Half"
+  },
+  {
+   "chart": "Satisfaction Score by Criterion",
+   "width": "Half"
+  }
+ ],
+ "creation": "2026-09-07 00:00:00.000000",
+ "dashboard_name": "Vendor Engagement",
+ "docstatus": 0,
+ "doctype": "Dashboard",
+ "idx": 0,
+ "is_default": 0,
+ "is_standard": 1,
+ "modified": "2026-10-14 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "Vendor Engagement",
+ "owner": "Administrator"
+}

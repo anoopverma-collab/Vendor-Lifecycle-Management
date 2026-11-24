@@ -1,0 +1,71 @@
+{
+ "actions": [],
+ "creation": "2026-08-19 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "check_type",
+  "status",
+  "source",
+  "reference_value",
+  "notes",
+  "attachment"
+ ],
+ "fields": [
+  {
+   "fieldname": "check_type",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Check Type",
+   "link_filters": "[[\"Compliance Check Type\",\"disabled\",\"=\",0]]",
+   "options": "Compliance Check Type",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "default": "Not Started",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Not Started\nIn Progress\nCleared\nFailed\nFlagged"
+  },
+  {
+   "description": "Agency, bureau, or registry used for this check — varies by country and check type.",
+   "fieldname": "source",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Source",
+   "link_filters": "[[\"Compliance Check Source\",\"disabled\",\"=\",0]]",
+   "options": "Compliance Check Source"
+  },
+  {
+   "description": "Whatever single value is relevant to this check — e.g. a credit score, a case number, or a list reference ID.",
+   "fieldname": "reference_value",
+   "fieldtype": "Data",
+   "label": "Reference / Value"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "attachment",
+   "fieldtype": "Attach",
+   "label": "Supporting Document"
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-19 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "Vendor Background Check Compliance Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

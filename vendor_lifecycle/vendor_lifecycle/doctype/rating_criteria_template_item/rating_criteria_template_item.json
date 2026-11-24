@@ -13,6 +13,7 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Criteria",
+   "link_filters": "[[\"Rating Criteria\",\"disabled\",\"=\",0]]",
    "options": "Rating Criteria",
    "reqd": 1
   }

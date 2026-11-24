@@ -1,0 +1,32 @@
+{
+ "actions": [],
+ "creation": "2026-08-24 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "license_type"
+ ],
+ "fields": [
+  {
+   "fieldname": "license_type",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "License / Permit Type",
+   "options": "License Type",
+   "link_filters": "[[\"License Type\",\"disabled\",\"=\",0]]",
+   "reqd": 1
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-26 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "Licenses and Permits Template Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

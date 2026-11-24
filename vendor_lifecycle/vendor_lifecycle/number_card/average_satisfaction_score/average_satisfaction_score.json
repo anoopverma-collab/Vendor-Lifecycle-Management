@@ -1,0 +1,21 @@
+{
+ "color": "#7c3aed",
+ "creation": "2026-10-14 12:00:00.000000",
+ "docstatus": 0,
+ "doctype": "Number Card",
+ "document_type": "Vendor Satisfaction Survey",
+ "dynamic_filters_json": "[]",
+ "filters_json": "[]",
+ "idx": 0,
+ "is_public": 1,
+ "is_standard": 1,
+ "label": "Average Satisfaction Score (12 Months)",
+ "method": "vendor_lifecycle.vendor_lifecycle.engagement_dashboard.average_score",
+ "modified": "2026-10-14 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "Average Satisfaction Score (12 Months)",
+ "owner": "Administrator",
+ "show_percentage_stats": 0,
+ "type": "Custom"
+}

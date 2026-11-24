@@ -3,16 +3,116 @@
 
 import frappe
 
+from vendor_lifecycle.vendor_lifecycle.db_errors import reraise_if_db_lock_error
+
+# --- vendor_lifecycle_status (fine-grained — "what's happening right
+# now") -----------------------------------------------------------------
+# Centralized here, rather than one set of constants per doctype as
+# before, because the shared revert/walk-back logic further down
+# (resolve_current_stage_status, revert_stage_result) needs to read every
+# stage's own status string regardless of which doctype's own cancel/
+# force-override triggered the check — Background Check reverting needs
+# to know Sampling Evaluation's and Compliance Audit's own labels just as
+# much as Vendor Sign Off already did, and Python can't support that
+# cross-referencing as a set of already-established one-way imports
+# between the 4 doctype files themselves (that would be a real circular
+# import). Each doctype's own .py still imports whichever of these it
+# actually uses, by name, from here.
 VENDOR_LIFECYCLE_STATUS_KYC_VERIFIED = "KYC Verified"
+
+VENDOR_LIFECYCLE_STATUS_BACKGROUND_CHECK_IN_PROGRESS = "Background Check In Progress"
+VENDOR_LIFECYCLE_STATUS_BACKGROUND_VERIFIED = "Background Verified"
+VENDOR_LIFECYCLE_STATUS_BACKGROUND_CHECK_FAILED = "Background Check Failed"
+VENDOR_LIFECYCLE_STATUS_REBACKGROUND_CHECK_IN_PROGRESS = "Re-Background Check In Progress"
+VENDOR_LIFECYCLE_STATUS_REBACKGROUND_CHECK_APPROVED = "Re-Background Check Approved"
+VENDOR_LIFECYCLE_STATUS_REBACKGROUND_CHECK_FAILED = "Re-Background Check Failed"
+
+VENDOR_LIFECYCLE_STATUS_COMPLIANCE_AUDIT_IN_PROGRESS = "Compliance Audit In Progress"
+VENDOR_LIFECYCLE_STATUS_AUDIT_VERIFIED = "Audit Verified"
+VENDOR_LIFECYCLE_STATUS_COMPLIANCE_AUDIT_FAILED = "Compliance Audit Failed"
+VENDOR_LIFECYCLE_STATUS_RECOMPLIANCE_AUDIT_IN_PROGRESS = "Re-Compliance Audit In Progress"
+VENDOR_LIFECYCLE_STATUS_RECOMPLIANCE_AUDIT_APPROVED = "Re-Compliance Audit Approved"
+VENDOR_LIFECYCLE_STATUS_RECOMPLIANCE_AUDIT_FAILED = "Re-Compliance Audit Failed"
+
+VENDOR_LIFECYCLE_STATUS_SAMPLING_IN_PROGRESS = "Sampling In Progress"
+VENDOR_LIFECYCLE_STATUS_SAMPLING_APPROVED = "Sampling Approved"
+VENDOR_LIFECYCLE_STATUS_SAMPLING_REJECTED = "Sampling Rejected"
+VENDOR_LIFECYCLE_STATUS_RESAMPLING_IN_PROGRESS = "Re-Sampling In Progress"
+VENDOR_LIFECYCLE_STATUS_RESAMPLING_APPROVED = "Re-Sampling Approved"
+VENDOR_LIFECYCLE_STATUS_RESAMPLING_REJECTED = "Re-Sampling Rejected"
+
+VENDOR_LIFECYCLE_STATUS_SIGN_OFF_IN_PROGRESS = "Sign Off In Progress"
+VENDOR_LIFECYCLE_STATUS_SIGN_OFF_FAILED = "Sign Off Failed"
+VENDOR_LIFECYCLE_STATUS_RESIGN_OFF_IN_PROGRESS = "Re-Sign Off In Progress"
+VENDOR_LIFECYCLE_STATUS_RESIGN_OFF_FAILED = "Re-Sign Off Failed"
+VENDOR_LIFECYCLE_STATUS_ACTIVE = "Active"
+
+# Set when an active vendor is disabled because its Compliance Audit /
+# contract ran out (expiry jobs in tasks.py, or a Failed Renewal of that
+# type). A Renewal of the matching type is still allowed on such a vendor
+# (see stage_sequencing.require_active_supplier_for_renewal) and puts
+# "Active" back when it passes.
+VENDOR_LIFECYCLE_STATUS_COMPLIANCE_AUDIT_EXPIRED = "Compliance Audit Expired"
+VENDOR_LIFECYCLE_STATUS_CONTRACT_EXPIRED = "Contract Expired"
+
+# Set only by Vendor Deboarding Checklist.on_submit() (and restored by
+# tasks.auto_disable_expired_temporary_enables() once a temporary enable
+# window lapses) — the one reliable marker that a Supplier was actually
+# deboarded through this app's own process, not just disabled for some
+# unrelated reason (a mid-onboarding failure also sets disabled=1, with a
+# completely different vendor_lifecycle_status). Also re-used here as the
+# re-boarding pipeline's own "nothing has passed yet" baseline (see
+# resolve_current_stage_status below) — a re-boarding run starts from
+# exactly this state.
+VENDOR_LIFECYCLE_STATUS_DISABLED = "Disabled"
+
+# --- vendor_lifecycle_stage (coarse — "which pipeline is this vendor
+# currently in, at a glance") --------------------------------------------
+VENDOR_LIFECYCLE_STAGE_ONBOARDING = "Onboarding in Process"
+VENDOR_LIFECYCLE_STAGE_ONBOARDING_FAILED = "Onboarding Failed"
+VENDOR_LIFECYCLE_STAGE_ONBOARDED = "Onboarded"
+VENDOR_LIFECYCLE_STAGE_DEBOARDING = "Deboarding in Process"
+VENDOR_LIFECYCLE_STAGE_DEBOARDING_FAILED = "Deboarding Failed"
+VENDOR_LIFECYCLE_STAGE_DEBOARDED = "Deboarded"
+VENDOR_LIFECYCLE_STAGE_REBOARDING = "Reboarding in Process"
+VENDOR_LIFECYCLE_STAGE_REBOARDING_FAILED = "Reboarding Failed"
+VENDOR_LIFECYCLE_STAGE_REBOARDED = "Reboarded"
 
 # Every doctype that can be configured in Settings as the point where the
 # Supplier gets created, other than Vendor KYC itself.
 SIBLING_DOCTYPES = [
+	"Vendor Background Check",
 	"Vendor Compliance Audit",
 	"Vendor Sampling Evaluation",
-	"Vendor Reference Check",
 	"Vendor Sign Off",
 ]
+
+
+KYC_DEAD_STATES = ("Rejected", "Trashed")
+
+
+def is_kyc_rejected(kyc_name):
+	"""True if this Vendor KYC is Rejected — via our own manual Reject
+	button's status field, or via an active Frappe Workflow's own state
+	field if one is configured on Vendor KYC. Our Reject button hides
+	itself whenever a workflow exists (see the "Vendor KYC Reject Button"
+	client script), so a workflow-driven rejection never touches our
+	`status` field at all — this has to be checked separately, through
+	whatever field and labels that workflow itself uses. Assumes a
+	workflow's rejection state is literally named "Rejected", matching
+	this app's own convention — a workflow using a different label for it
+	won't be recognized here. A Trashed KYC counts the same way — it's an
+	abandoned attempt too."""
+	if frappe.db.get_value("Vendor KYC", kyc_name, "status") in KYC_DEAD_STATES:
+		return True
+
+	workflow_state_field = frappe.db.get_value(
+		"Workflow", {"document_type": "Vendor KYC", "is_active": 1}, "workflow_state_field"
+	)
+	if not workflow_state_field:
+		return False
+
+	return frappe.db.get_value("Vendor KYC", kyc_name, workflow_state_field) in KYC_DEAD_STATES
 
 
 def sync_vendor_field(doc):
@@ -27,27 +127,63 @@ def sync_vendor_field(doc):
 		doc.vendor = supplier
 
 
-def maybe_create_vendor(doc):
-	"""Call from on_submit of Vendor KYC or any of SIBLING_DOCTYPES. Creates
-	the Supplier only if `doc.doctype` is the stage currently configured in
-	Settings as the Supplier-creation trigger, and none exists yet — then
-	backfills `vendor` on this doc and any sibling stage documents already
-	created for the same KYC. Returns the Supplier doc, or None if this call
-	wasn't the configured trigger or a Supplier already existed."""
-	trigger = frappe.db.get_single_value("Vendor Lifecycle Settings", "create_vendor_at") or "Vendor KYC"
-	if doc.doctype != trigger:
-		return None
+def mark_vendor_status_in_progress(doc, status):
+	"""Flags the Supplier's status as "<Stage> In Progress" the moment this
+	stage's document is first created — before it's actually submitted or
+	passed. Call from validate() on any of SIBLING_DOCTYPES, after
+	sync_vendor_field(). Only fires once, on creation (is_new()) — later
+	saves of the same still-draft document don't need to re-set it, and
+	on_submit() overwrites it with the real "Verified"/"Approved" status
+	anyway once the stage actually completes."""
+	if doc.is_new() and doc.vendor:
+		frappe.db.set_value("Supplier", doc.vendor, "vendor_lifecycle_status", status)
 
-	kyc = doc if doc.doctype == "Vendor KYC" else frappe.get_doc("Vendor KYC", doc.kyc)
+
+def sync_onboarding_request_field(doc):
+	"""Backfill `onboarding_request` from the linked KYC, once available.
+	Call from validate() on any of SIBLING_DOCTYPES, alongside
+	sync_vendor_field — a no-op once already set, and a no-op if the KYC
+	itself has no Onboarding Request (direct-creation KYCs, when Settings
+	allows those)."""
+	if doc.onboarding_request or not doc.kyc:
+		return
+	onboarding_request = frappe.db.get_value("Vendor KYC", doc.kyc, "onboarding_request")
+	if onboarding_request:
+		doc.onboarding_request = onboarding_request
+
+
+def require_kyc_unless_reboarding(doc):
+	"""kyc is hidden and only conditionally mandatory (mandatory_depends_on:
+	eval:!doc.is_reboarding) on all of SIBLING_DOCTYPES, so it can stay
+	blank and out of the way for a re-boarding-flagged document (which
+	gets its own kyc/vendor resolved from reboarding_request instead —
+	see each doctype's own _resolve_reboarding_kyc_and_vendor). But
+	mandatory_depends_on is desk-UI-only in this Frappe version — it never
+	blocks a save via the API — so the real enforcement for the ordinary
+	onboarding case (kyc genuinely required there) has to happen here.
+
+	A Renewal-flagged document (doc.is_renewal — e.g. a Compliance Audit
+	or Sign Off with Type = Renewal) has no kyc/reboarding_request anchor
+	at all by design; it stands alone, scoped only by vendor. getattr
+	with a default handles doctypes that don't have an is_renewal field
+	at all (Background Check today) the same as a plain False.
+
+	Call from validate() on any of SIBLING_DOCTYPES."""
+	if not doc.is_reboarding and not getattr(doc, "is_renewal", False) and not doc.kyc:
+		frappe.throw(frappe._("Vendor KYC is mandatory."), frappe.MandatoryError)
+
+
+def maybe_create_vendor(kyc):
+	"""Call from Vendor KYC's on_submit. Creates the Supplier if none exists
+	yet for this KYC, then backfills `vendor` onto any sibling stage
+	documents already created for it — possible when a stage document is
+	created before its KYC is submitted (e.g. with "Enforce Sequential
+	Stages" off). Returns the Supplier doc, or None if one already existed."""
 	if kyc.supplier:
 		return None
 
 	supplier = _create_or_update_supplier(kyc)
-
-	if doc.doctype != "Vendor KYC":
-		doc.db_set("vendor", supplier.name)
-
-	_backfill_sibling_vendor_fields(kyc.name, supplier.name, skip_doctype=doc.doctype, skip_name=doc.name)
+	_backfill_sibling_vendor_fields(kyc.name, supplier.name)
 
 	return supplier
 
@@ -65,6 +201,14 @@ SUPPLIER_FIELD_MAP = {
 	"billing_currency": "default_currency",
 	"payment_terms_template": "payment_terms",
 	"tax_withholding_category": "tax_withholding_category",
+	"legal_entity_type": "legal_entity_type",
+	"business_type": "business_type",
+	"is_transporter": "is_transporter",
+	"is_internal_supplier": "is_internal_supplier",
+	"represents_company": "represents_company",
+	"gstin_uin": "gstin",
+	"pan_card": "pan",
+	"tax_id": "tax_id",
 }
 
 
@@ -82,67 +226,1010 @@ def _create_or_update_supplier(kyc):
 		if kyc.get(kyc_fieldname):
 			supplier.set(supplier_fieldname, kyc.get(kyc_fieldname))
 
+	# Child table rows belong to their own parent — copying the row objects
+	# across as-is (like the plain field map above does) would leave them
+	# pointing at the wrong parent, so each row's own values are copied into
+	# a fresh row on the Supplier instead.
+	for row in kyc.get("accounts") or []:
+		supplier.append("accounts", {
+			"company": row.company,
+			"account": row.account,
+			"advance_account": row.advance_account,
+		})
+
 	supplier.vendor_lifecycle_status = VENDOR_LIFECYCLE_STATUS_KYC_VERIFIED
-	supplier.on_hold = 1
-	supplier.hold_type = "All"
+	supplier.vendor_lifecycle_stage = VENDOR_LIFECYCLE_STAGE_ONBOARDING
+	# is_frozen is core ERPNext's own broader block — checked centrally on
+	# every transaction doctype with a party (Purchase Order, Invoice,
+	# Payment Entry, GL Entry, etc.), unlike the narrower on_hold/hold_type
+	# ("Block Supplier") mechanism this used to use. It's also made
+	# read-only on the Supplier form for any Supplier with vendor_kyc set
+	# (see the Property Setter) — the only way to change it from here on is
+	# the "Freeze/Unfreeze Supplier" button on Vendor KYC, or automatically
+	# on Sign Off.
+	supplier.is_frozen = 1
+	supplier.vendor_kyc = kyc.name
+	supplier.onboarding_request = kyc.onboarding_request
 
 	is_new_supplier = supplier.is_new()
-	if is_new_supplier:
-		supplier.insert(ignore_permissions=True)
-	else:
-		supplier.save(ignore_permissions=True)
+	try:
+		if is_new_supplier:
+			supplier.insert(ignore_permissions=True)
+		else:
+			supplier.save(ignore_permissions=True)
+	except frappe.DuplicateEntryError:
+		# The new Supplier's name (from Supplier Naming By = Supplier Name)
+		# is already taken by an existing Supplier. Onboarding an existing
+		# Supplier isn't supported yet, so say that plainly instead of
+		# showing the raw database "Duplicate entry" error.
+		frappe.clear_last_message()
+		frappe.throw(
+			frappe._(
+				"Supplier {0} already exists. Vendor Lifecycle creates a new Supplier when a KYC is"
+				" submitted and can't onboard an existing one yet. Ask a System Manager to rename or"
+				" remove the existing Supplier, or use a different Supplier Name on this KYC."
+			).format(frappe.bold(supplier.supplier_name)),
+			title=frappe._("Supplier Already Exists"),
+		)
+	except Exception as e:
+		reraise_if_db_lock_error()
+		# If the caught error itself came from frappe.throw(), it already
+		# queued its own message for automatic display — left in place,
+		# the user would see both that raw error AND the friendlier one
+		# below, stacked together. A no-op if nothing was queued (e.g. a
+		# plain Python exception, not a frappe.throw()).
+		frappe.clear_last_message()
+		frappe.throw(
+			frappe._("Could not create the Supplier automatically: {0}").format(str(e)),
+			title=frappe._("Supplier Creation Failed"),
+		)
 
 	kyc.db_set("supplier", supplier.name)
 
 	if is_new_supplier:
-		_create_addresses_for_supplier(kyc, supplier)
+		try:
+			address = _create_addresses_for_supplier(kyc, supplier)
+		except Exception as e:
+			reraise_if_db_lock_error()
+			# See the matching comment on the Supplier-creation try/except
+			# above — without this, the raw underlying error would show
+			# alongside this friendlier wrapped one.
+			frappe.clear_last_message()
+			frappe.throw(
+				frappe._("Supplier {0} was created, but the Address could not be created automatically: {1}").format(
+					frappe.bold(supplier.name), str(e)
+				),
+				title=frappe._("Address Creation Failed"),
+			)
+
+		try:
+			contact = make_contact_for_supplier(supplier, *_contact_args_from_kyc(kyc))
+		except Exception as e:
+			reraise_if_db_lock_error()
+			# See the matching comment on the Supplier-creation try/except
+			# above — without this, the raw underlying error would show
+			# alongside this friendlier wrapped one.
+			frappe.clear_last_message()
+			frappe.throw(
+				frappe._("Supplier {0} was created, but the Contact could not be created automatically: {1}").format(
+					frappe.bold(supplier.name), str(e)
+				),
+				title=frappe._("Contact Creation Failed"),
+			)
+
+		try:
+			bank_account = make_bank_account_for_supplier(supplier, *_bank_account_args_from_kyc(kyc))
+		except Exception as e:
+			reraise_if_db_lock_error()
+			# See the matching comment on the Supplier-creation try/except
+			# above — without this, the raw underlying error would show
+			# alongside this friendlier wrapped one.
+			frappe.clear_last_message()
+			frappe.throw(
+				frappe._(
+					"Supplier {0} was created, but the Bank Account could not be created automatically: {1}"
+				).format(frappe.bold(supplier.name), str(e)),
+				title=frappe._("Bank Account Creation Failed"),
+			)
+		# These three read-only fields on Vendor KYC point at whatever this
+		# automatic, on-submit pass produced — the reviewer's own reference
+		# for "what did submitting this KYC actually create". Records made
+		# later via the KYC's "Create Address/Contact/Bank Account" buttons
+		# are additional/extra ones and intentionally don't overwrite these.
+		if address:
+			kyc.db_set("address", address.name)
+		if contact:
+			kyc.db_set("contact", contact.name)
+		if bank_account:
+			kyc.db_set("bank_account", bank_account.name)
 
 	return supplier
+
+
+def _contact_args_from_kyc(kyc):
+	first_name, _, last_name = (kyc.contact_person_name or "").partition(" ")
+	return first_name or None, last_name or None, kyc.official_email, kyc.contact_person_number
+
+
+def _bank_account_args_from_kyc(kyc):
+	return (
+		kyc.bank_account_name, kyc.bank, kyc.bank_account_no, kyc.ifsc_branch_code, kyc.iban, kyc.account_type,
+		kyc.is_default_bank_account,
+	)
 
 
 def _create_addresses_for_supplier(kyc, supplier):
 	"""Creates one Address record if the reviewer confirmed the GSTIN address
 	matches the one filled in manually, or both as separate records if they
 	said the two differ. A no-op for whichever side has nothing to create
-	from — e.g. a vendor outside India never has a GSTIN address at all."""
+	from — e.g. a vendor outside India never has a GSTIN address at all.
+	Returns the first Address created (for the read-only reference field on
+	Vendor KYC), or None if neither side had anything to create."""
 	if kyc.is_address_same_as_gstin:
 		if kyc.gstin_address_line and kyc.gstin_city:
-			_make_address(
-				supplier, kyc.address_type or "Billing", kyc.gstin_address_line, kyc.gstin_city, kyc.gstin_state,
-				kyc.gstin_pincode, "India",
+			return make_address_for_supplier(
+				supplier, kyc.address_type or "Billing", kyc.gstin_address_line, None, kyc.gstin_city,
+				kyc.gstin_state, kyc.gstin_pincode, "India", kyc.gstin_uin,
 			)
-		return
+		return None
 
-	if kyc.firm_address and kyc.city:
-		_make_address(
-			supplier, kyc.address_type or "Billing", kyc.firm_address, kyc.city, kyc.state, kyc.pincode,
-			kyc.country or "India",
+	first_address = None
+	if kyc.address_line_1 and kyc.city:
+		first_address = make_address_for_supplier(
+			supplier, kyc.address_type or "Billing", kyc.address_line_1, kyc.address_line_2, kyc.city, kyc.state,
+			kyc.pincode, kyc.country or "India", kyc.gstin_uin,
 		)
 
 	if kyc.gstin_address_line and kyc.gstin_city:
-		_make_address(
-			supplier, "Billing", kyc.gstin_address_line, kyc.gstin_city, kyc.gstin_state, kyc.gstin_pincode, "India"
+		second_address = make_address_for_supplier(
+			supplier, "Billing", kyc.gstin_address_line, None, kyc.gstin_city, kyc.gstin_state, kyc.gstin_pincode,
+			"India", kyc.gstin_uin,
 		)
+		first_address = first_address or second_address
+
+	return first_address
 
 
-def _make_address(supplier, address_type, address_line1, city, state, pincode, country):
+def make_address_for_supplier(
+	supplier, address_type, address_line1, address_line2, city, state, pincode, country, gstin=None
+):
+	"""Creates one Address linked to `supplier`. Used both for the automatic,
+	on-submit creation above, and directly from Vendor KYC's "Create Address"
+	button — the latter passes in values a reviewer typed into a dialog,
+	rather than anything read off the KYC document itself."""
 	address = frappe.new_doc("Address")
 	address.address_title = supplier.supplier_name
 	address.address_type = address_type
 	address.address_line1 = address_line1
+	address.address_line2 = address_line2
 	address.city = city
 	address.state = state
 	address.pincode = pincode
 	address.country = country
 	address.append("links", {"link_doctype": "Supplier", "link_name": supplier.name})
+	address.vendor_kyc = supplier.vendor_kyc
+	# india_compliance's own Custom Field on Address — only exists at all
+	# when that app is installed. Set whenever the KYC has a GSTIN, on every
+	# address created for this vendor (not just the one that happens to be
+	# the GSTIN-registered one), since it's a property of the firm, not of
+	# any one specific address.
+	if gstin and "india_compliance" in frappe.get_installed_apps():
+		address.gstin = gstin
 	address.insert(ignore_permissions=True)
 	return address
 
 
-def _backfill_sibling_vendor_fields(kyc_name, supplier_name, skip_doctype=None, skip_name=None):
+def make_contact_for_supplier(supplier, first_name, last_name, email, phone):
+	"""Creates one Contact linked to `supplier`. A no-op if there's no first
+	name to build a Contact from — that's the only thing this treats as
+	required, since neither Contact's own doctype nor Frappe's controller
+	enforces one. Used both for the automatic, on-submit creation above, and
+	directly from Vendor KYC's "Create Contact" button."""
+	if not first_name:
+		return None
+
+	contact = frappe.new_doc("Contact")
+	contact.first_name = first_name
+	contact.last_name = last_name
+	contact.company_name = supplier.supplier_name
+	contact.is_primary_contact = 1
+
+	if email:
+		contact.email_id = email
+		contact.append("email_ids", {"email_id": email, "is_primary": 1})
+
+	if phone:
+		contact.phone = phone
+		contact.append("phone_nos", {"phone": phone, "is_primary_phone": 1})
+
+	contact.append("links", {"link_doctype": "Supplier", "link_name": supplier.name})
+	contact.vendor_kyc = supplier.vendor_kyc
+	contact.insert(ignore_permissions=True)
+	return contact
+
+
+def make_bank_account_for_supplier(supplier, account_name, bank, bank_account_no, branch_code, iban, account_type, is_default):
+	"""Creates one Bank Account linked to `supplier`. A no-op unless both
+	Account Name and Bank are given — Bank Account's own doctype requires
+	both, so there's nothing valid to create without them. Used both for the
+	automatic, on-submit creation above, and directly from Vendor KYC's
+	"Create Bank Account" button."""
+	if not (account_name and bank):
+		return None
+
+	bank_account = frappe.new_doc("Bank Account")
+	bank_account.account_name = account_name
+	bank_account.bank = bank
+	bank_account.bank_account_no = bank_account_no
+	bank_account.branch_code = branch_code
+	# Bank Account has no field for SWIFT/BIC — IBAN is the only one of the
+	# two international details it can actually hold.
+	bank_account.iban = iban
+	bank_account.account_type = account_type
+	bank_account.is_default = is_default
+	bank_account.party_type = "Supplier"
+	bank_account.party = supplier.name
+	bank_account.vendor_kyc = supplier.vendor_kyc
+	bank_account.insert(ignore_permissions=True)
+	return bank_account
+
+
+def _backfill_sibling_vendor_fields(kyc_name, supplier_name):
 	for doctype in SIBLING_DOCTYPES:
 		filters = {"kyc": kyc_name, "vendor": ["in", ("", None)]}
 		for name in frappe.get_all(doctype, filters=filters, pluck="name"):
-			if doctype == skip_doctype and name == skip_name:
-				continue
 			frappe.db.set_value(doctype, name, "vendor", supplier_name)
+
+
+def validate_supplier_vendor_kyc(doc, method=None):
+	"""Wired via hooks.py doc_events on Supplier. Both checks read straight
+	from the database (not a cached value) — deliberately, since this runs
+	mid-transaction during Vendor KYC's own on_submit (docstatus flips to
+	submitted before on_submit fires, so a live DB read already sees it as
+	submitted; a cached read might not)."""
+	if (
+		doc.is_new()
+		and not doc.vendor_kyc
+		and not doc.flags.get("ignore_vendor_lifecycle_restriction")
+		and frappe.db.get_single_value("Vendor Lifecycle Settings", "restrict_supplier_creation_to_vendor_lifecycle")
+	):
+		# is_new() is what keeps this from retroactively blocking existing
+		# Suppliers that already have no Vendor KYC (created before this
+		# setting existed, or unrelated to this app entirely) — only a
+		# brand-new Supplier is required to have one. The flags check is a
+		# deliberate escape hatch for internal/test code that legitimately
+		# needs a plain Supplier with nothing to do with this app (e.g.
+		# portal-permission or satisfaction-survey tests) — never set from
+		# the Desk UI or any real creation path.
+		frappe.throw(
+			frappe._("A Supplier can only be created from the Vendor Lifecycle module. Link a Vendor KYC."),
+			frappe.MandatoryError,
+		)
+
+	# Only check the link when it is being set or changed. Vendor KYC is
+	# hidden and read-only and only ever set on KYC submit, so an unchanged
+	# value was already checked then. Re-checking it on every save blocked
+	# every later edit of the Supplier once its KYC was gone (e.g. after the
+	# app was uninstalled and installed again), with no way to fix it from
+	# the form.
+	if not doc.vendor_kyc or not (doc.is_new() or doc.has_value_changed("vendor_kyc")):
+		return
+
+	docstatus = frappe.db.get_value("Vendor KYC", doc.vendor_kyc, "docstatus")
+	if docstatus is None:
+		frappe.throw(frappe._("Vendor KYC {0} does not exist.").format(frappe.bold(doc.vendor_kyc)))
+	if docstatus != 1:
+		frappe.throw(
+			frappe._("Vendor KYC {0} must be submitted before it can be linked to a Supplier.").format(
+				frappe.bold(doc.vendor_kyc)
+			)
+		)
+
+	duplicate = frappe.db.get_value(
+		"Supplier", {"vendor_kyc": doc.vendor_kyc, "name": ["!=", doc.name or ""]}, "name"
+	)
+	if duplicate:
+		frappe.throw(
+			frappe._("Vendor KYC {0} is already linked to Supplier {1}.").format(
+				frappe.bold(doc.vendor_kyc), frappe.bold(duplicate)
+			)
+		)
+
+
+# Checked in reverse pipeline order (latest stage first) — a disabled
+# Supplier normally has exactly one of these, but "Enforce Sequential
+# Stages" being off makes more than one theoretically possible; showing
+# the latest stage's failure is the most likely to actually be the
+# current, actionable reason. Vendor Sign Off is NOT in this list — see
+# get_disable_reason_for_supplier()'s own handling of it below, since
+# (unlike these three) more than one submitted Sign Off can legitimately
+# exist per vendor at once (a Failed one kept for history, plus a retry).
+DISABLE_REASON_SOURCES = [
+	# force_overridden: 0 — an overridden result is no longer a live reason
+	# the Supplier is (or should stay) disabled; see force_override() on
+	# each of these three doctypes.
+	# is_renewal: 0 — a Renewal / Ad-hoc result is never a pipeline
+	# failure; a Failed Renewal's own disable is tracked by the "... Expired"
+	# statuses instead.
+	("Vendor Sampling Evaluation", {"evaluation_outcome": "Rejected", "force_overridden": 0, "is_renewal": 0}),
+	("Vendor Compliance Audit", {"outcome": "Failed", "force_overridden": 0, "is_renewal": 0}),
+	("Vendor Background Check", {"overall_status": "Failed", "force_overridden": 0}),
+]
+
+
+def get_disable_reason_for_supplier(supplier):
+	"""Supplier.disabled is set automatically by a Failed Background
+	Check, a Failed Compliance Audit, a Rejected Sampling Evaluation, or a
+	Failed Sign Off — and only ever reverted by that same record being
+	cancelled (see each doctype's own _revert_disable_if_this_was_the_
+	failed_one / _revert_vendor_status_to_last_completed_stage). Returns
+	whichever submitted record is responsible, if any."""
+	# Sign Off is checked first (latest stage = most likely current
+	# reason, same as the DISABLE_REASON_SOURCES ordering below), but by
+	# its MOST RECENT submitted record only — a vendor can have an old
+	# Failed Sign Off retried by a newer one, and only the newer one's
+	# own outcome should ever count as a live reason. A plain "does any
+	# Failed Sign Off exist" filter would keep blaming a superseded,
+	# already-retried failure forever.
+	latest_sign_off = frappe.db.get_value(
+		"Vendor Sign Off",
+		{"vendor": supplier, "docstatus": 1, "is_renewal": 0},
+		["name", "sign_off_failed"],
+		as_dict=True,
+		order_by="creation desc",
+	)
+	if latest_sign_off and latest_sign_off.sign_off_failed:
+		return {"doctype": "Vendor Sign Off", "name": latest_sign_off.name}
+
+	for doctype, filters in DISABLE_REASON_SOURCES:
+		# is_reboarding: 0 — a re-boarding-flagged Failed/Rejected record
+		# never disables the Supplier in the first place (see each of
+		# these three doctypes' own _handle_failed_result /
+		# _handle_rejected_result), so it must never count as a "reason"
+		# here either, even though it shares the same vendor.
+		name = frappe.db.get_value(
+			doctype, {"vendor": supplier, "docstatus": 1, "is_reboarding": 0, **filters}, "name"
+		)
+		if name:
+			return {"doctype": doctype, "name": name}
+	return None
+
+
+def get_failed_stage_reason(*, kyc=None, reboarding_request=None, include_sign_off=True):
+	"""Same shape and same DISABLE_REASON_SOURCES filters as
+	get_disable_reason_for_supplier above, but scoped to one specific
+	pipeline run (kyc, for onboarding; reboarding_request, for
+	re-boarding) instead of the vendor overall — this is what decides
+	whether the Supplier's coarse vendor_lifecycle_stage should currently
+	read "Onboarding Failed" / "Reboarding Failed". Exactly one of kyc /
+	reboarding_request must be given."""
+	if reboarding_request:
+		scope = {"reboarding_request": reboarding_request}
+	else:
+		# kyc alone isn't enough to scope to *onboarding* specifically — a
+		# re-boarding document carries this very same kyc (see each stage
+		# doctype's own _resolve_reboarding_kyc_and_vendor), so without
+		# this it would also wrongly match a re-boarding-flagged record
+		# for the same vendor.
+		scope = {"kyc": kyc, "is_reboarding": 0}
+
+	latest_sign_off = include_sign_off and frappe.db.get_value(
+		"Vendor Sign Off", {**scope, "docstatus": 1}, ["name", "sign_off_failed"],
+		as_dict=True, order_by="creation desc",
+	)
+	if latest_sign_off and latest_sign_off.sign_off_failed:
+		return {"doctype": "Vendor Sign Off", "name": latest_sign_off.name}
+
+	for doctype, filters in DISABLE_REASON_SOURCES:
+		name = frappe.db.get_value(doctype, {**scope, "docstatus": 1, **filters}, "name")
+		if name:
+			return {"doctype": doctype, "name": name}
+	return None
+
+
+def resolve_current_stage_status(*, kyc=None, reboarding_request=None):
+	"""Walks backward through whichever of Sampling Evaluation / Compliance
+	Audit / Background Check most recently actually passed, for one
+	specific pipeline run (onboarding, scoped by kyc; re-boarding, scoped
+	by reboarding_request), and returns the matching vendor_lifecycle_status
+	label — falling back to a real baseline (KYC Verified for onboarding;
+	Disabled for re-boarding, since that's what a re-boarding run starts
+	from) if none of the three ever passed. Same walk-back Vendor Sign
+	Off's own cancel handler already did for onboarding, generalized here
+	so Background Check / Compliance Audit / Sampling Evaluation's own
+	cancel handlers can reuse it too, and so it also covers re-boarding."""
+	if reboarding_request:
+		scope = {"reboarding_request": reboarding_request}
+		sampling, audit, background, baseline = (
+			VENDOR_LIFECYCLE_STATUS_RESAMPLING_APPROVED,
+			VENDOR_LIFECYCLE_STATUS_RECOMPLIANCE_AUDIT_APPROVED,
+			VENDOR_LIFECYCLE_STATUS_REBACKGROUND_CHECK_APPROVED,
+			VENDOR_LIFECYCLE_STATUS_DISABLED,
+		)
+	else:
+		scope = {"kyc": kyc, "is_reboarding": 0}
+		sampling, audit, background, baseline = (
+			VENDOR_LIFECYCLE_STATUS_SAMPLING_APPROVED,
+			VENDOR_LIFECYCLE_STATUS_AUDIT_VERIFIED,
+			VENDOR_LIFECYCLE_STATUS_BACKGROUND_VERIFIED,
+			VENDOR_LIFECYCLE_STATUS_KYC_VERIFIED,
+		)
+
+	# A force-overridden failure counts as passed here, same as for the next
+	# stage's own gate (stage_sequencing.stage_requirement_satisfied).
+	if _passed_or_overridden("Vendor Sampling Evaluation", scope, {"evaluation_outcome": "Approved"}):
+		return sampling
+	if _passed_or_overridden("Vendor Compliance Audit", scope, {"outcome": "Passed"}):
+		return audit
+	if _passed_or_overridden("Vendor Background Check", scope, {"overall_status": "Passed"}):
+		return background
+	return baseline
+
+
+def _passed_or_overridden(doctype, scope, passed_filter):
+	return bool(
+		frappe.db.exists(doctype, {**scope, "docstatus": 1, **passed_filter})
+		or frappe.db.exists(doctype, {**scope, "docstatus": 1, "force_overridden": 1})
+	)
+
+
+FAILED_STATUS_BY_DOCTYPE = {
+	# doctype: (onboarding status, re-boarding status)
+	"Vendor Background Check": (
+		VENDOR_LIFECYCLE_STATUS_BACKGROUND_CHECK_FAILED, VENDOR_LIFECYCLE_STATUS_REBACKGROUND_CHECK_FAILED,
+	),
+	"Vendor Compliance Audit": (
+		VENDOR_LIFECYCLE_STATUS_COMPLIANCE_AUDIT_FAILED, VENDOR_LIFECYCLE_STATUS_RECOMPLIANCE_AUDIT_FAILED,
+	),
+	"Vendor Sampling Evaluation": (
+		VENDOR_LIFECYCLE_STATUS_SAMPLING_REJECTED, VENDOR_LIFECYCLE_STATUS_RESAMPLING_REJECTED,
+	),
+	"Vendor Sign Off": (VENDOR_LIFECYCLE_STATUS_SIGN_OFF_FAILED, VENDOR_LIFECYCLE_STATUS_RESIGN_OFF_FAILED),
+}
+
+
+def resolve_run_status(*, kyc=None, reboarding_request=None):
+	"""The vendor_lifecycle_status one pipeline run should show right now:
+	the Failed/Rejected status of a failure still standing in it, else the
+	most advanced passed stage (resolve_current_stage_status)."""
+	reason = get_failed_stage_reason(kyc=kyc, reboarding_request=reboarding_request)
+	if reason:
+		return FAILED_STATUS_BY_DOCTYPE[reason["doctype"]][1 if reboarding_request else 0]
+	return resolve_current_stage_status(kyc=kyc, reboarding_request=reboarding_request)
+
+
+def _run_scope(doc):
+	if doc.get("is_reboarding"):
+		return {"reboarding_request": doc.get("reboarding_request")}
+	return {"kyc": doc.get("kyc")}
+
+
+PASSED_STATUS_BY_DOCTYPE = {
+	"Vendor Background Check": (
+		VENDOR_LIFECYCLE_STATUS_BACKGROUND_VERIFIED, VENDOR_LIFECYCLE_STATUS_REBACKGROUND_CHECK_APPROVED,
+	),
+	"Vendor Compliance Audit": (
+		VENDOR_LIFECYCLE_STATUS_AUDIT_VERIFIED, VENDOR_LIFECYCLE_STATUS_RECOMPLIANCE_AUDIT_APPROVED,
+	),
+	"Vendor Sampling Evaluation": (
+		VENDOR_LIFECYCLE_STATUS_SAMPLING_APPROVED, VENDOR_LIFECYCLE_STATUS_RESAMPLING_APPROVED,
+	),
+}
+
+
+def refresh_status_after_pass_cancelled(doc):
+	"""Call from on_cancel() of a passed Background Check / Compliance Audit /
+	Sampling Evaluation (onboarding or re-boarding) — its "Verified" /
+	"Approved" status no longer holds. Left alone if a later stage has
+	already moved the status on (e.g. its draft's "... In Progress")."""
+	if not doc.vendor or not any(_run_scope(doc).values()):
+		return
+	passed_status = PASSED_STATUS_BY_DOCTYPE[doc.doctype][1 if doc.get("is_reboarding") else 0]
+	if frappe.db.get_value("Supplier", doc.vendor, "vendor_lifecycle_status") != passed_status:
+		return
+	frappe.db.set_value("Supplier", doc.vendor, "vendor_lifecycle_status", resolve_run_status(**_run_scope(doc)))
+
+
+def restore_status_after_draft_deleted(doc, in_progress_status):
+	"""Call from on_trash() of a stage document. Creating its draft set
+	in_progress_status on the Supplier (mark_vendor_status_in_progress);
+	deleting it unsubmitted puts back what the run actually stands at.
+	Left alone if something else has changed the status since."""
+	if doc.docstatus != 0 or not doc.vendor or doc.get("is_renewal") or not any(_run_scope(doc).values()):
+		return
+	if frappe.db.get_value("Supplier", doc.vendor, "vendor_lifecycle_status") != in_progress_status:
+		return
+	frappe.db.set_value("Supplier", doc.vendor, "vendor_lifecycle_status", resolve_run_status(**_run_scope(doc)))
+
+
+# Each renewal-expiry status -> the Supplier date it tracks and the
+# Settings checkbox that makes running out of it disable the vendor.
+RENEWAL_EXPIRY_SOURCES = {
+	VENDOR_LIFECYCLE_STATUS_COMPLIANCE_AUDIT_EXPIRED: (
+		"compliance_audit_valid_until",
+		"disable_vendor_on_compliance_audit_expiry",
+	),
+	VENDOR_LIFECYCLE_STATUS_CONTRACT_EXPIRED: ("contract_valid_until", "disable_vendor_on_contract_expiry"),
+}
+
+
+def set_renewal_expired(vendor, expired_status):
+	"""Disable an active vendor whose Compliance Audit / contract ran out
+	(expiry job, or a Failed Renewal) and say why in its status. Only for a
+	vendor a Renewal applies to - a deboarded, mid-pipeline, on-hold or
+	frozen vendor keeps its own status."""
+	from vendor_lifecycle.vendor_lifecycle.stage_sequencing import RENEWABLE_STAGES
+
+	stage, on_hold, is_frozen = frappe.db.get_value(
+		"Supplier", vendor, ["vendor_lifecycle_stage", "on_hold", "is_frozen"]
+	)
+	# Same rule as require_active_supplier_for_renewal: a Renewal couldn't
+	# bring an on-hold or frozen vendor back, so never expire one.
+	if stage not in RENEWABLE_STAGES or on_hold or is_frozen:
+		return
+	frappe.db.set_value("Supplier", vendor, {"disabled": 1, "vendor_lifecycle_status": expired_status})
+
+
+def clear_renewal_expired(vendor, expired_status):
+	"""Undo set_renewal_expired() once a Renewal of that type passes (or the
+	Failed one is cancelled while still in date) — only if expired_status is
+	still the reason shown and no pipeline failure is disabling the vendor.
+	If the other renewal check has run out too, the vendor stays disabled
+	under that one instead."""
+	if frappe.db.get_value("Supplier", vendor, "vendor_lifecycle_status") != expired_status:
+		return
+	if get_disable_reason_for_supplier(vendor):
+		return
+	other_expired_status = _other_renewal_expiry(vendor, expired_status)
+	if other_expired_status:
+		frappe.db.set_value("Supplier", vendor, "vendor_lifecycle_status", other_expired_status)
+		return
+	frappe.db.set_value(
+		"Supplier", vendor, {"disabled": 0, "vendor_lifecycle_status": VENDOR_LIFECYCLE_STATUS_ACTIVE}
+	)
+
+
+def _other_renewal_expiry(vendor, expired_status):
+	"""The other renewal-expiry status whose date has passed (with its
+	disable checkbox on), or None."""
+	settings = frappe.get_single("Vendor Lifecycle Settings")
+	today = frappe.utils.getdate(frappe.utils.today())
+	for status, (date_field, disable_checkbox) in RENEWAL_EXPIRY_SOURCES.items():
+		if status == expired_status or not settings.get(disable_checkbox):
+			continue
+		valid_until = frappe.db.get_value("Supplier", vendor, date_field)
+		if valid_until and frappe.utils.getdate(valid_until) < today:
+			return status
+	return None
+
+
+def revert_stage_result(vendor, *, kyc=None, reboarding_request=None):
+	"""Call after cancelling, or force-overriding, a Failed/Rejected
+	Background Check / Compliance Audit / Sampling Evaluation (or, for the
+	coarse field only, a Failed Vendor Sign Off) — reverts both the fine
+	vendor_lifecycle_status and the coarse vendor_lifecycle_stage's
+	"Onboarding Failed" / "Reboarding Failed" marker, but only if nothing
+	else in this same pipeline run is still Failed/Rejected.
+	get_failed_stage_reason() is the single source of truth both fields
+	defer to here, so they can never disagree about whether this pipeline
+	run currently has a live failure."""
+	if not vendor:
+		return
+	if get_failed_stage_reason(kyc=kyc, reboarding_request=reboarding_request):
+		return
+	frappe.db.set_value("Supplier", vendor, {
+		"vendor_lifecycle_status": resolve_current_stage_status(kyc=kyc, reboarding_request=reboarding_request),
+		"vendor_lifecycle_stage": VENDOR_LIFECYCLE_STAGE_REBOARDING if reboarding_request else VENDOR_LIFECYCLE_STAGE_ONBOARDING,
+	})
+
+
+def resolve_settled_active_stage(vendor):
+	"""Whether an active (non-disabled) vendor's coarse stage should read
+	"Onboarded" or "Reboarded" — used wherever a Supplier is being
+	reactivated by something other than a Sign Off itself (which already
+	knows which pipeline it belongs to), e.g. reverting a cancelled Vendor
+	Deboarding Checklist back to however this vendor was settled before
+	deboarding started. Reboarded takes precedence: a vendor with any
+	submitted, passed re-boarding Sign Off has, by definition, been
+	through re-boarding at least once."""
+	if frappe.db.exists(
+		"Vendor Sign Off", {"vendor": vendor, "docstatus": 1, "is_reboarding": 1, "sign_off_failed": 0}
+	):
+		return VENDOR_LIFECYCLE_STAGE_REBOARDED
+	return VENDOR_LIFECYCLE_STAGE_ONBOARDED
+
+
+def set_supplier_disable_reason_onload(doc, method=None):
+	"""Wired via hooks.py doc_events on Supplier's "onload" — attaches
+	whichever record disabled this Supplier directly onto the document as
+	it's loaded for display, so the form's own JS can show an explanatory
+	ribbon synchronously from frm.doc.__onload, with no separate
+	client-side round-trip (and so no risk of that round-trip's response
+	arriving after some other script's own refresh() has already run and
+	touched the same intro/headline banner slot)."""
+	if not (doc.vendor_kyc and doc.disabled):
+		return
+	reason = get_disable_reason_for_supplier(doc.name)
+	if reason:
+		doc.set_onload("disable_reason", reason)
+
+
+# Shared by every Vendor Lifecycle email sender (Vendor Onboarding Request,
+# Vendor KYC, each stage doctype, and Vendor Sign Off) — kept in this
+# neutral module rather than on any one doctype's own controller, since
+# vendor_sign_off.py already imports from the three stage doctypes and
+# putting these on Sign Off would make importing them back into those
+# three a circular import.
+VENDOR_LIFECYCLE_MANAGER_ROLE = "Vendor Lifecycle Manager"
+
+
+def vendor_lifecycle_manager_emails():
+	# Every enabled user holding the Vendor Lifecycle Manager role — always
+	# CC'd on every Vendor Lifecycle email, regardless of what's in
+	# Settings' own Always CC list.
+	user_names = frappe.get_all(
+		"Has Role", filters={"role": VENDOR_LIFECYCLE_MANAGER_ROLE, "parenttype": "User"}, pluck="parent"
+	)
+	if not user_names:
+		return []
+	return frappe.get_all("User", filters={"name": ["in", user_names], "enabled": 1}, pluck="email")
+
+
+def vendor_lifecycle_cc_list(settings):
+	cc = [addr.strip() for addr in (settings.vendor_lifecycle_email_always_cc or "").split(",") if addr.strip()]
+	for email in vendor_lifecycle_manager_emails():
+		if email and email not in cc:
+			cc.append(email)
+	return cc
+
+
+def vendor_lifecycle_emails_enabled(settings=None):
+	# The master switch — every email sender in the app checks this first.
+	# When off, nothing here should ever try to send anything at all.
+	settings = settings or frappe.get_single("Vendor Lifecycle Settings")
+	return bool(settings.enable_vendor_lifecycle_emails)
+
+
+def require_vendor_lifecycle_email_account(settings):
+	# No fallback, by explicit design: if this isn't set (or the account it
+	# points to is missing/disabled), sending is blocked outright rather
+	# than silently going out from whatever default account the site
+	# happens to have configured for other purposes.
+	if not settings.vendor_lifecycle_email_account:
+		frappe.throw(frappe._("Set an Email Account in Vendor Lifecycle Settings first."))
+	account = frappe.db.get_value(
+		"Email Account",
+		settings.vendor_lifecycle_email_account,
+		["name", "email_id", "enable_outgoing"],
+		as_dict=True,
+	)
+	if not account:
+		frappe.throw(
+			frappe._("The Vendor Lifecycle Email Account {0} no longer exists — update Vendor Lifecycle Settings.").format(
+				frappe.bold(settings.vendor_lifecycle_email_account)
+			)
+		)
+	if not account.enable_outgoing:
+		frappe.throw(
+			frappe._("The Vendor Lifecycle Email Account {0} is disabled for outgoing mail.").format(
+				frappe.bold(settings.vendor_lifecycle_email_account)
+			)
+		)
+	return account
+
+
+def get_kyc_vendor_contact(kyc_name):
+	# Shared by every stage doctype after Vendor KYC (Background Check /
+	# Compliance Audit / Sampling Evaluation) — none of them carry their
+	# own copy of the vendor's email/contact/firm name, only a `kyc` Link.
+	return (
+		frappe.db.get_value(
+			"Vendor KYC", kyc_name, ["official_email", "contact_person_name", "firm_name"], as_dict=True
+		)
+		or {}
+	)
+
+
+def resolve_vendor_lifecycle_company_name():
+	# "The receiving org" for every new stage-outcome email (Onboarding
+	# Request, Vendor KYC, and each of the three stage doctypes) — none of
+	# those carry Vendor Sign Off's own per-document Company override, so
+	# this is just Global Defaults, with a plain fallback so the template
+	# never renders a blank "{{ company_name }}".
+	return frappe.defaults.get_global_default("company") or frappe._("our team")
+
+
+# Doctype -> Settings fieldname gating that doctype's emails, on top of the
+# master "Use Emails" switch. The 5 onboarding-verification stage doctypes
+# (Vendor KYC and the four doctypes after it, excluding Deboarding) share
+# one combined switch rather than one each, per explicit product decision.
+DOCTYPE_EMAIL_SETTINGS_FIELD = {
+	"Vendor Onboarding Request": "onboarding_request_emails",
+	"Vendor KYC": "onboarding_verification_emails",
+	"Vendor Background Check": "onboarding_verification_emails",
+	"Vendor Compliance Audit": "onboarding_verification_emails",
+	"Vendor Sampling Evaluation": "onboarding_verification_emails",
+	"Vendor Sign Off": "onboarding_verification_emails",
+	"Vendor Deboarding Request": "deboarding_request_emails",
+	"Vendor Reboarding Request": "reboarding_request_emails",
+	"Vendor Deboarding Checklist": "deboarding_checklist_emails",
+	"Vendor Satisfaction Survey": "satisfaction_survey_emails",
+}
+
+# A handful of emails are scheduled "nag" reminders rather than their
+# doctype's main event-driven emails, and get their own separate switch
+# (shown nested under the doctype's own switch via depends_on in the
+# Settings form) — matched on the literal template name, since send_
+# vendor_lifecycle_email() only ever receives that, not which internal
+# code path triggered it. Checked in addition to, not instead of, the
+# doctype-level switch above.
+REMINDER_EMAIL_SETTINGS_FIELD = {
+	"Vendor Deboarding Checklist Task Reminder": "deboarding_checklist_task_reminder_emails",
+	"Vendor Deboarding Clearance Certificate Follow-up": "deboarding_checklist_clearance_followup_emails",
+	"Vendor Satisfaction Survey Reminder": "satisfaction_survey_reminder_emails",
+	"Compliance Audit Renewal Due": "compliance_audit_renewal_due_emails",
+	"Compliance Audit Renewal Draft Reminder": "compliance_audit_renewal_draft_reminder_emails",
+	"Sign Off Renewal Due": "signoff_renewal_due_emails",
+	"Sign Off Renewal Draft Reminder": "signoff_renewal_draft_reminder_emails",
+}
+
+
+def vendor_lifecycle_doctype_email_enabled(doctype, template_name, settings):
+	"""Whether this specific email is allowed out, per its own per-doctype
+	(and, for the four scheduled reminders, per-reminder) Settings
+	checkbox — on top of, not instead of, the master "Use Emails" switch
+	the caller already checked. A doctype/template not mapped here
+	defaults to enabled, so this only ever restricts what's explicitly
+	listed above."""
+	doctype_field = DOCTYPE_EMAIL_SETTINGS_FIELD.get(doctype)
+	if doctype_field and not settings.get(doctype_field):
+		return False
+	reminder_field = REMINDER_EMAIL_SETTINGS_FIELD.get(template_name)
+	if reminder_field and not settings.get(reminder_field):
+		return False
+	return True
+
+
+def send_vendor_lifecycle_email(
+	doctype, name, template_name, context, recipients, extra_cc=None, settings_doctype=None
+):
+	"""Shared low-level sender for every new, simple (no-attachment)
+	Vendor Lifecycle notification — Onboarding Request received/approved,
+	KYC completed/rejected, and each stage doctype's own passed/failed/
+	force-overridden outcome. Best-effort by design (never raises — the
+	caller is expected to wrap this in its own try/except so a broken
+	template or account never blocks the real state change it's
+	reporting on), same as Vendor Sign Off's own outcome-email sender.
+
+	Silently does nothing if "Use Emails" is off, if `recipients` is
+	empty, or if a template of `template_name` doesn't exist — deliberate,
+	since this always runs from a doc_events-style hook where a hard
+	failure would be surprising.
+
+	`settings_doctype` picks the per-doctype Settings checkbox when the email
+	is filed on a different record (e.g. a renewal reminder filed on the
+	Supplier). Returns True only when the email was actually sent."""
+	settings = frappe.get_single("Vendor Lifecycle Settings")
+	if not vendor_lifecycle_emails_enabled(settings):
+		return
+	if not vendor_lifecycle_doctype_email_enabled(settings_doctype or doctype, template_name, settings):
+		return
+	if not recipients:
+		return
+	if not frappe.db.exists("Email Template", template_name):
+		# Best-effort on purpose (see docstring) - but a missing template
+		# used to fail this silently with no trace anywhere, which made a
+		# deleted template indistinguishable from "nothing to send this
+		# time". Logged to Error Log (for an admin), and now also as a
+		# Comment directly on the document itself (for whoever's actually
+		# looking at it — same self.add_comment("Comment", ...) pattern
+		# used everywhere else in this app) - neither one blocks whatever
+		# real state change this was reporting on.
+		frappe.log_error(
+			title=f"{doctype}: email not sent, template missing",
+			message=f"Email Template {template_name!r} does not exist. Recipients: {recipients}",
+		)
+		try:
+			frappe.get_doc(doctype, name).add_comment(
+				"Comment",
+				text=frappe._("An email could not be sent — the {0} Email Template is missing.").format(
+					frappe.bold(template_name)
+				),
+			)
+		except Exception:
+			reraise_if_db_lock_error()
+			# The Error Log entry above is the guaranteed record of this —
+			# never let a failure while merely adding a Comment escalate
+			# into breaking this best-effort function's own no-raise
+			# contract.
+			pass
+		return
+
+	template = frappe.get_doc("Email Template", template_name)
+	subject = template.get_formatted_subject(context)
+	message = template.get_formatted_response(context)
+
+	cc = vendor_lifecycle_cc_list(settings)
+	for addr in extra_cc or []:
+		if addr and addr not in cc:
+			cc.append(addr)
+	# Don't CC an address that's already a direct recipient (e.g. an
+	# internal-only notification where every recipient already is a
+	# Vendor Lifecycle Manager) — looks odd sitting in both headers.
+	cc = [addr for addr in cc if addr not in recipients]
+
+	# Best-effort account resolution, unlike require_vendor_lifecycle_
+	# email_account()'s no-fallback requirement for an explicit user
+	# action — these notifications must still go out even if the account
+	# is missing or misconfigured.
+	account = None
+	if settings.vendor_lifecycle_email_account:
+		account = frappe.db.get_value(
+			"Email Account", settings.vendor_lifecycle_email_account, ["name", "email_id"], as_dict=True
+		)
+
+	result = _make_system_communication(
+		doctype=doctype,
+		name=name,
+		subject=subject,
+		content=message,
+		sender=account.email_id if account else None,
+		recipients=", ".join(recipients),
+		cc=", ".join(cc) if cc else None,
+		send_email=False,
+	)
+	comm = frappe.get_doc("Communication", result["name"])
+	if account:
+		comm.db_set("email_account", account.name, update_modified=False)
+	comm.send_email()
+	return True
+
+
+def _make_system_communication(**kwargs):
+	"""Communication for an automatic notification, not a user's own "send
+	email" action — so no "email" permission check on the reference
+	document (a Guest web-form submission has none). Same internal
+	function Frappe's own Notification doctype uses; add_signature=False
+	matches what the whitelisted make() passes."""
+	from frappe.core.doctype.communication.email import _make
+
+	return _make(add_signature=False, **kwargs)
+
+
+DEFAULT_MANUAL_ATTACH_NEEDED_EMAIL_TEMPLATE = "Vendor Lifecycle Manual Attachment Needed"
+
+
+def notify_manual_attach_needed(doctype, name, owner, reason):
+	"""Shared by signoff_reply.py and checklist_clearance_reply.py — an
+	inbound reply couldn't be auto-attached (the vendor forwarded instead
+	of replying, breaking Frappe's own In-Reply-To threading, or replied
+	with more than one attachment) — the Creator and Vendor Lifecycle
+	Manager are told to check the document and attach it by hand."""
+	try:
+		_notify_manual_attach_needed_unsafe(doctype, name, owner, reason)
+	except Exception:
+		reraise_if_db_lock_error()
+		frappe.log_error(
+			title=f"{doctype}: failed to send manual-attach-needed email", message=frappe.get_traceback()
+		)
+
+
+def _notify_manual_attach_needed_unsafe(doctype, name, owner, reason):
+	_send_internal_document_email(
+		doctype,
+		name,
+		owner,
+		DEFAULT_MANUAL_ATTACH_NEEDED_EMAIL_TEMPLATE,
+		{
+			"doctype_label": doctype,
+			"document_name": name,
+			"document_link": frappe.utils.get_url_to_form(doctype, name),
+			"reason": reason,
+		},
+	)
+
+
+DEFAULT_ATTACHMENT_SAVE_FAILED_EMAIL_TEMPLATE = "Vendor Lifecycle Attachment Save Failed"
+
+
+def notify_attachment_save_failed(doctype, name, owner, context):
+	"""Sent by reply_attach_guard.py — saving an inbound reply's file onto
+	the document raised an error and was rolled back. `context` carries
+	error_log_name/error_log_link (empty if logging itself failed), sender,
+	received_on and will_retry. Best-effort, same as
+	notify_manual_attach_needed()."""
+	try:
+		_send_internal_document_email(
+			doctype,
+			name,
+			owner,
+			DEFAULT_ATTACHMENT_SAVE_FAILED_EMAIL_TEMPLATE,
+			{
+				"doctype_label": doctype,
+				"document_name": name,
+				"document_link": frappe.utils.get_url_to_form(doctype, name),
+				**context,
+			},
+		)
+	except Exception:
+		reraise_if_db_lock_error()
+		frappe.log_error(
+			title=f"{doctype}: failed to send attachment-save-failed email", message=frappe.get_traceback()
+		)
+
+
+def _send_internal_document_email(doctype, name, owner, template_name, context):
+	"""Internal (staff-facing) email about one document — to its Creator,
+	CC'd to the Vendor Lifecycle Manager role and Settings' Always CC.
+	Shared by the manual-attach-needed and attachment-save-failed emails."""
+	creator_email = frappe.db.get_value("User", owner, "email") or owner
+	if not creator_email:
+		return
+	settings = frappe.get_single("Vendor Lifecycle Settings")
+	if not vendor_lifecycle_emails_enabled(settings):
+		return
+	# Bypasses send_vendor_lifecycle_email() (builds its own Communication
+	# directly, below) — so the caller's own per-doctype switch (Sign Off's
+	# or Deboarding Checklist's, whichever this notification is about) has
+	# to be checked explicitly here too.
+	if not vendor_lifecycle_doctype_email_enabled(doctype, template_name, settings):
+		return
+	if not frappe.db.exists("Email Template", template_name):
+		return
+	cc = vendor_lifecycle_cc_list(settings)
+
+	template = frappe.get_doc("Email Template", template_name)
+	subject = template.get_formatted_subject(context)
+	message = template.get_formatted_response(context)
+
+	_make_system_communication(
+		doctype=doctype,
+		name=name,
+		subject=subject,
+		content=message,
+		recipients=creator_email,
+		cc=", ".join(cc) if cc else None,
+		send_email=True,
+	)
+
+
+def phone_with_country_code(number, country=None):
+	"""Return `number` in Frappe's strict Phone format ("+91-9876543210"),
+	or None if it can't be made valid.
+
+	Contact's own mobile_no/phone are free text, so legacy numbers are often
+	saved with no country code — which a Phone fieldtype rejects outright
+	("Country Code Required"). A number without a leading "+" gets the dial
+	code of `country` (falling back to System Settings' country) prefixed;
+	the result is only returned if phonenumbers considers it valid."""
+	from phonenumbers import NumberParseException, country_code_for_region, is_valid_number, parse
+
+	number = (number or "").strip()
+	if not number:
+		return None
+
+	if not number.startswith("+"):
+		country = country or frappe.db.get_single_value("System Settings", "country")
+		region = frappe.db.get_value("Country", country, "code") if country else None
+		dial_code = country_code_for_region(region.upper()) if region else 0
+		if not dial_code:
+			return None
+		digits = "".join(ch for ch in number if ch.isdigit()).lstrip("0")
+		number = f"+{dial_code}-{digits}"
+
+	try:
+		return number if is_valid_number(parse(number)) else None
+	except NumberParseException:
+		return None
+
+
+def get_supplier_contact_email(supplier):
+	"""Email of the Supplier's primary Contact, resolved the way core Frappe
+	does (get_default_contact: the linked Contact marked Is Primary Contact,
+	else any linked Contact) — not Supplier.email_id, which ERPNext only
+	fills when supplier_primary_contact is picked on the Supplier form and
+	so is often blank for older suppliers."""
+	from frappe.contacts.doctype.contact.contact import get_default_contact
+
+	contact_name = get_default_contact("Supplier", supplier) if supplier else None
+	return frappe.db.get_value("Contact", contact_name, "email_id") if contact_name else None
