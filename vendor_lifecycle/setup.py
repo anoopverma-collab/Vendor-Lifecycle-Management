@@ -174,10 +174,13 @@ CUSTOM_FIELDS = {
 			"module": MODULE,
 		},
 		{
+			# Plain Data, not a Link (same as vendor_kyc above): a Link is
+			# re-checked by Frappe on every save, so a Supplier whose request
+			# no longer exists (e.g. after uninstall + reinstall) could never
+			# be saved again. Only the app sets this field.
 			"fieldname": "onboarding_request",
 			"label": "Vendor Onboarding Request",
-			"fieldtype": "Link",
-			"options": "Vendor Onboarding Request",
+			"fieldtype": "Data",
 			"depends_on": "eval:doc.onboarding_request",
 			"insert_after": "vendor_kyc",
 			"read_only": 1,
@@ -215,10 +218,15 @@ CUSTOM_FIELDS = {
 	],
 	"Purchase Invoice": [
 		{
+			# Both source fields are plain Data, not Link / Dynamic Link: a
+			# link is re-checked on every save, so a draft Purchase Invoice
+			# whose source was later cancelled, or an old one whose source
+			# was deleted (uninstall + reinstall), could no longer be saved,
+			# amended or updated. Only the app's "Bill to External Agency"
+			# buttons set them.
 			"fieldname": "vendor_lifecycle_source_doctype",
 			"label": "Vendor Lifecycle Source Doctype",
-			"fieldtype": "Link",
-			"options": "DocType",
+			"fieldtype": "Data",
 			"depends_on": "eval:doc.vendor_lifecycle_source_name",
 			"insert_after": "supplier_name",
 			"read_only": 1,
@@ -227,8 +235,7 @@ CUSTOM_FIELDS = {
 		{
 			"fieldname": "vendor_lifecycle_source_name",
 			"label": "Vendor Lifecycle Source",
-			"fieldtype": "Dynamic Link",
-			"options": "vendor_lifecycle_source_doctype",
+			"fieldtype": "Data",
 			"depends_on": "eval:doc.vendor_lifecycle_source_name",
 			"insert_after": "vendor_lifecycle_source_doctype",
 			"read_only": 1,

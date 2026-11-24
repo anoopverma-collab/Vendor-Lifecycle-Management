@@ -257,6 +257,20 @@ def _create_or_update_supplier(kyc):
 			supplier.insert(ignore_permissions=True)
 		else:
 			supplier.save(ignore_permissions=True)
+	except frappe.DuplicateEntryError:
+		# The new Supplier's name (from Supplier Naming By = Supplier Name)
+		# is already taken by an existing Supplier. Onboarding an existing
+		# Supplier isn't supported yet, so say that plainly instead of
+		# showing the raw database "Duplicate entry" error.
+		frappe.clear_last_message()
+		frappe.throw(
+			frappe._(
+				"Supplier {0} already exists. Vendor Lifecycle creates a new Supplier when a KYC is"
+				" submitted and can't onboard an existing one yet. Ask a System Manager to rename or"
+				" remove the existing Supplier, or use a different Supplier Name on this KYC."
+			).format(frappe.bold(supplier.supplier_name)),
+			title=frappe._("Supplier Already Exists"),
+		)
 	except Exception as e:
 		reraise_if_db_lock_error()
 		# If the caught error itself came from frappe.throw(), it already
@@ -492,7 +506,13 @@ def validate_supplier_vendor_kyc(doc, method=None):
 			frappe.MandatoryError,
 		)
 
-	if not doc.vendor_kyc:
+	# Only check the link when it is being set or changed. Vendor KYC is
+	# hidden and read-only and only ever set on KYC submit, so an unchanged
+	# value was already checked then. Re-checking it on every save blocked
+	# every later edit of the Supplier once its KYC was gone (e.g. after the
+	# app was uninstalled and installed again), with no way to fix it from
+	# the form.
+	if not doc.vendor_kyc or not (doc.is_new() or doc.has_value_changed("vendor_kyc")):
 		return
 
 	docstatus = frappe.db.get_value("Vendor KYC", doc.vendor_kyc, "docstatus")
