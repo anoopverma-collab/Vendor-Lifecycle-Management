@@ -7,8 +7,11 @@
  "field_order": [
   "task",
   "category",
-  "is_done",
-  "remark"
+  "assigned_to_1",
+  "assigned_to_2",
+  "status",
+  "remark",
+  "last_notified_on"
  ],
  "fields": [
   {
@@ -27,22 +30,47 @@
    "read_only": 1
   },
   {
-   "default": "0",
-   "fieldname": "is_done",
-   "fieldtype": "Check",
+   "fieldname": "assigned_to_1",
+   "fieldtype": "Link",
    "in_list_view": 1,
-   "label": "Done"
+   "label": "Assigned To",
+   "options": "User"
   },
   {
+   "fieldname": "assigned_to_2",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Assigned To (2)",
+   "options": "User"
+  },
+  {
+   "default": "Not Started",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Not Started\nIn Progress\nCompleted\nInvalid\nUnable to Complete"
+  },
+  {
+   "description": "Required when Status is Invalid or Unable to Complete.",
    "fieldname": "remark",
    "fieldtype": "Small Text",
    "in_list_view": 1,
-   "label": "Remark"
+   "label": "Remark",
+   "mandatory_depends_on": "eval:doc.status==\"Invalid\"||doc.status==\"Unable to Complete\""
+  },
+  {
+   "fieldname": "last_notified_on",
+   "fieldtype": "Datetime",
+   "hidden": 1,
+   "label": "Last Notified On",
+   "no_copy": 1,
+   "read_only": 1
   }
  ],
  "istable": 1,
  "links": [],
- "modified": "2026-08-03 13:08:45.433369",
+ "modified": "2026-09-05 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Vendor Lifecycle",
  "name": "Vendor Deboarding Checklist Item",

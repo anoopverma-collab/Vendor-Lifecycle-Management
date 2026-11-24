@@ -8,37 +8,48 @@
   "item",
   "category",
   "response",
+  "evidence",
   "remark"
  ],
  "fields": [
   {
+   "columns": 3,
    "fieldname": "item",
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Checklist Item",
-   "read_only": 1,
    "reqd": 1
   },
   {
+   "columns": 1,
    "fieldname": "category",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Category",
-   "read_only": 1
+   "label": "Category"
   },
   {
-   "default": "N/A",
+   "columns": 2,
+   "default": "",
    "fieldname": "response",
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Response",
-   "options": "Pass\nFail\nN/A"
+   "options": "\nPass\nFail\nN/A"
   },
   {
+   "fieldname": "evidence",
+   "fieldtype": "Attach",
+   "label": "Evidence",
+   "description": "Required if the Checklist Template marks this item's evidence as mandatory."
+  },
+  {
+   "columns": 4,
+   "description": "Mandatory once Response is Fail or N/A.",
    "fieldname": "remark",
    "fieldtype": "Small Text",
    "in_list_view": 1,
-   "label": "Remark"
+   "label": "Reason/Remark",
+   "mandatory_depends_on": "eval:doc.response=='Fail' || doc.response=='N/A'"
   }
  ],
  "istable": 1,

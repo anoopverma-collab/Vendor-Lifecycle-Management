@@ -7,7 +7,7 @@
  "field_order": [
   "criteria",
   "category",
-  "value",
+  "assessment",
   "remark"
  ],
  "fields": [
@@ -16,21 +16,21 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Evaluation Criteria",
-   "read_only": 1,
    "reqd": 1
   },
   {
    "fieldname": "category",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Category",
-   "read_only": 1
+   "label": "Category"
   },
   {
-   "fieldname": "value",
-   "fieldtype": "Data",
+   "default": "",
+   "fieldname": "assessment",
+   "fieldtype": "Select",
    "in_list_view": 1,
-   "label": "Result / Value"
+   "label": "Assessment",
+   "options": "\nMeets\nPartially Meets\nDoes Not Meet"
   },
   {
    "fieldname": "remark",

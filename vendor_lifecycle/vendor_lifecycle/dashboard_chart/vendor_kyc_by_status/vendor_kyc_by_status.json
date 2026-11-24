@@ -1,0 +1,23 @@
+{
+ "chart_name": "Vendor KYC by Status",
+ "chart_type": "Custom",
+ "creation": "2026-09-07 00:00:00.000000",
+ "custom_options": "{\"height\": 300, \"colors\": [\"#4CAF50\", \"#E53935\", \"#FFA726\", \"#42A5F5\"]}",
+ "docstatus": 0,
+ "doctype": "Dashboard Chart",
+ "dynamic_filters_json": "[]",
+ "filters_json": "[]",
+ "idx": 0,
+ "is_public": 1,
+ "is_standard": 1,
+ "modified": "2026-09-10 17:30:00.000000",
+ "modified_by": "Administrator",
+ "module": "Vendor Lifecycle",
+ "name": "Vendor KYC by Status",
+ "owner": "Administrator",
+ "source": "Vendor KYC by Status",
+ "timeseries": 0,
+ "type": "Donut",
+ "use_report_chart": 0,
+ "y_axis": []
+}

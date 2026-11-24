@@ -4,6 +4,9 @@ app_publisher = "Auriga IT"
 app_description = "Vendor onboarding and deboarding lifecycle management for Frappe/ERPNext"
 app_email = "rahul.chaudhary@aurigait.com"
 app_license = "mit"
+# "?v=" makes browsers fetch the logo again after it changes (assets are cached for a year).
+app_logo_url = "/assets/vendor_lifecycle/icons/desktop_icons/subtle/vendor_lifecycle.svg?v=1"
+app_home = "/desk/vendor-lifecycle"
 
 # Apps
 # ------------------
@@ -17,48 +20,20 @@ required_apps = ["erpnext"]
 # for roles (like Vendor Lifecycle User) that can't read Settings directly.
 extend_bootinfo = "vendor_lifecycle.vendor_lifecycle.boot.set_bootinfo"
 
-# Registry of e-sign providers for Vendor Sign Off, resolved in
-# vendor_lifecycle.integrations.dispatch.get_esign_handler. Another app can add
-# a provider (e.g. Digio) by declaring the same hook key with its own handler
-# path — no changes to this app are needed.
-vendor_lifecycle_esign_providers = {
-	"Manual": "vendor_lifecycle.vendor_lifecycle.integrations.esign.manual.ManualESignHandler"
-}
-
-# Same registry pattern, for the deboarding-checklist-completion notification slot.
-vendor_lifecycle_notification_providers = {
-	"Manual": "vendor_lifecycle.vendor_lifecycle.integrations.notification.manual.ManualNotificationHandler"
-}
-
-fixtures = [
-	{
-		"doctype": "Role",
-		"filters": [["role_name", "in", ["Vendor Lifecycle Manager", "Vendor Lifecycle User"]]]
-	},
-	{
-		"doctype": "Custom Field",
-		"filters": [["module", "=", "Vendor Lifecycle"]]
-	},
-	{
-		"doctype": "Property Setter",
-		"filters": [["module", "=", "Vendor Lifecycle"]]
-	},
-	{
-		"doctype": "Client Script",
-		"filters": [["module", "=", "Vendor Lifecycle"]]
-	},
-]
+# Roles, Custom Fields, Property Setters and Supplier Connections are not
+# fixtures (those are force-imported on every migrate, undoing a site's own
+# changes) - see vendor_lifecycle/setup.py.
 
 # Each item in the list will be shown as an app in the apps page
-# add_to_apps_screen = [
-# 	{
-# 		"name": "vendor_lifecycle",
-# 		"logo": "/assets/vendor_lifecycle/logo.png",
-# 		"title": "Vendor Lifecycle",
-# 		"route": "/vendor_lifecycle",
-# 		"has_permission": "vendor_lifecycle.api.permission.has_app_permission"
-# 	}
-# ]
+add_to_apps_screen = [
+	{
+		"name": app_name,
+		"logo": app_logo_url,
+		"title": app_title,
+		"route": app_home,
+		"has_permission": "vendor_lifecycle.vendor_lifecycle.permissions.check_app_permission",
+	}
+]
 
 # Includes in <head>
 # ------------------
@@ -82,8 +57,11 @@ fixtures = [
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
-# doctype_js = {"doctype" : "public/js/doctype.js"}
-# doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
+# Supplier is a core ERPNext doctype this app doesn't own — these two hooks
+# are Frappe's own sanctioned way to add extra client-side behavior to a
+# doctype from another app, without touching ERPNext's own source files.
+doctype_js = {"Supplier": "public/js/supplier.js"}
+doctype_list_js = {"Supplier": "public/js/supplier_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
@@ -102,6 +80,38 @@ fixtures = [
 # role_home_page = {
 # 	"Role": "home_page"
 # }
+
+# Vendor-facing Supplier Portal pages — Vendor Satisfaction Survey,
+# deliberately built as plain www/ pages (not Web Forms) so they live
+# inside the normal portal (sidebar-visible, alongside a vendor's other
+# records) rather than as a standalone form. The list is hand-built
+# (www/vss_list) for a proper server-rendered table
+# with a Status column — Frappe's generic doctype-name list route is
+# AJAX-driven and renders no data on first load, which is why it looked
+# broken/empty. Satisfaction Survey has no vendor-facing create page — a
+# Supplier can only view/fill/submit a survey the scheduler or an internal
+# user already created (no "create" permission on the doctype at all for
+# that role). "new" and "<name>" detail/edit pages are hand-built (Frappe
+# has no generic create/edit page for a plain doctype outside Web Form),
+# mirroring the same pattern ERPNext's own Request for Quotation portal page
+# uses.
+website_route_rules = [
+	{"from_route": "/vendor-satisfaction-surveys", "to_route": "vss_list"},
+	{
+		"from_route": "/vendor-satisfaction-surveys/<path:name>",
+		"to_route": "vss_detail",
+		"defaults": {"doctype": "Vendor Satisfaction Survey"},
+	},
+]
+
+standard_portal_menu_items = [
+	{
+		"title": "Satisfaction Surveys",
+		"route": "/vendor-satisfaction-surveys",
+		"reference_doctype": "Vendor Satisfaction Survey",
+		"role": "Supplier",
+	},
+]
 
 # Generators
 # ----------
@@ -135,8 +145,8 @@ after_migrate = "vendor_lifecycle.vendor_lifecycle.install.after_migrate"
 # Uninstallation
 # ------------
 
-# before_uninstall = "vendor_lifecycle.uninstall.before_uninstall"
-# after_uninstall = "vendor_lifecycle.uninstall.after_uninstall"
+before_uninstall = "vendor_lifecycle.vendor_lifecycle.uninstall.before_uninstall"
+after_uninstall = "vendor_lifecycle.vendor_lifecycle.uninstall.after_uninstall"
 
 # Integration Setup
 # ------------------
@@ -172,36 +182,35 @@ after_migrate = "vendor_lifecycle.vendor_lifecycle.install.after_migrate"
 
 permission_query_conditions = {
 	"Vendor Satisfaction Survey": "vendor_lifecycle.vendor_lifecycle.permissions.vendor_satisfaction_survey_query_conditions",
-	"Vendor Support Ticket": "vendor_lifecycle.vendor_lifecycle.permissions.vendor_support_ticket_query_conditions",
 }
 
 has_permission = {
 	"Vendor Satisfaction Survey": "vendor_lifecycle.vendor_lifecycle.permissions.vendor_satisfaction_survey_has_permission",
-	"Vendor Support Ticket": "vendor_lifecycle.vendor_lifecycle.permissions.vendor_support_ticket_has_permission",
 }
 
 # Document Events
 # ---------------
 # Hook on document methods and events
 
+# No doc_events on Purchase Order / RFQ / Purchase Invoice / Purchase Receipt /
+# Journal Entry / Payment Entry: a disabled (deboarded) Supplier is already
+# fully blocked on all of them by ERPNext's own
+# erpnext.accounts.party.validate_party_frozen_disabled (at validate for the
+# buying documents, at GL Entry for JE/PE). Final dues are settled through the
+# Deboarding Checklist's "Temporarily Enable Supplier" instead.
 doc_events = {
-	"Purchase Order": {
-		"validate": "vendor_lifecycle.vendor_lifecycle.deboarding_guard.block_disabled_supplier_on_order",
+	"Supplier": {
+		"validate": "vendor_lifecycle.vendor_lifecycle.vendor_creation.validate_supplier_vendor_kyc",
+		"onload": [
+			"vendor_lifecycle.vendor_lifecycle.vendor_creation.set_supplier_disable_reason_onload",
+			"vendor_lifecycle.vendor_lifecycle.doctype.vendor_deboarding_checklist.vendor_deboarding_checklist.set_supplier_temporary_enable_onload",
+		],
 	},
-	"Request for Quotation": {
-		"validate": "vendor_lifecycle.vendor_lifecycle.deboarding_guard.block_disabled_supplier_on_order",
-	},
-	"Purchase Invoice": {
-		"validate": "vendor_lifecycle.vendor_lifecycle.deboarding_guard.warn_disabled_supplier_on_transaction",
-	},
-	"Purchase Receipt": {
-		"validate": "vendor_lifecycle.vendor_lifecycle.deboarding_guard.warn_disabled_supplier_on_transaction",
-	},
-	"Journal Entry": {
-		"validate": "vendor_lifecycle.vendor_lifecycle.deboarding_guard.warn_disabled_supplier_on_transaction",
-	},
-	"Payment Entry": {
-		"validate": "vendor_lifecycle.vendor_lifecycle.deboarding_guard.warn_disabled_supplier_on_transaction",
+	"Communication": {
+		"on_update": [
+			"vendor_lifecycle.vendor_lifecycle.signoff_reply.handle_signoff_reply",
+			"vendor_lifecycle.vendor_lifecycle.checklist_clearance_reply.handle_checklist_clearance_reply",
+		],
 	},
 }
 
@@ -211,7 +220,22 @@ doc_events = {
 scheduler_events = {
 	"daily": [
 		"vendor_lifecycle.vendor_lifecycle.tasks.create_pending_satisfaction_surveys",
+		"vendor_lifecycle.vendor_lifecycle.tasks.send_satisfaction_survey_reminders",
+		"vendor_lifecycle.vendor_lifecycle.tasks.send_checklist_assignment_reminders",
+		"vendor_lifecycle.vendor_lifecycle.tasks.send_deboarding_checklist_followups",
+		"vendor_lifecycle.vendor_lifecycle.tasks.send_signoff_followups",
+		"vendor_lifecycle.vendor_lifecycle.tasks.send_compliance_audit_renewal_notices",
+		"vendor_lifecycle.vendor_lifecycle.tasks.send_compliance_audit_renewal_draft_reminders",
+		"vendor_lifecycle.vendor_lifecycle.tasks.send_signoff_renewal_notices",
+		"vendor_lifecycle.vendor_lifecycle.tasks.send_signoff_renewal_draft_reminders",
 	],
+	# Needs a specific time (2 AM), unlike the "daily" bucket above which
+	# just runs sometime during Frappe's own daily scheduler window.
+	"cron": {
+		"0 2 * * *": [
+			"vendor_lifecycle.vendor_lifecycle.tasks.auto_disable_expired_temporary_enables",
+		],
+	},
 }
 
 # Testing

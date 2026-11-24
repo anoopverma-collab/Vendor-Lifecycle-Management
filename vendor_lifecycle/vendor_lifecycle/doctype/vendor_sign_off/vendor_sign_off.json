@@ -6,25 +6,54 @@
  "document_type": "Document",
  "engine": "InnoDB",
  "field_order": [
+  "signoff_type",
   "kyc",
   "vendor",
-  "provider",
+  "is_reboarding",
+  "is_renewal",
+  "reboarding_request",
+  "onboarding_request",
+  "previous_failed_sign_off",
+  "supplier_email",
+  "additional_email",
+  "contact_person_name",
+  "contact_person_number",
   "column_break_top",
-  "requested_on",
-  "signed_on",
-  "section_break_document",
-  "signed_document",
-  "notes"
+  "company",
+  "sign_off_failed",
+  "failure_reason",
+  "section_break_documents",
+  "contract",
+  "signed_contract",
+  "contract_validity",
+  "column_break_documents",
+  "code_of_conduct_acknowledged",
+  "code_of_conduct",
+  "code_of_conduct_document",
+  "notes",
+  "upload_token",
+  "last_reminder_sent",
+  "amended_from"
  ],
  "fields": [
   {
+   "fieldname": "signoff_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Type",
+   "options": "\nOnboarding\nReboarding\nRenewal",
+   "read_only_depends_on": "eval:doc.kyc || doc.reboarding_request",
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.signoff_type==\"Onboarding\"",
    "fieldname": "kyc",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Vendor KYC",
+   "mandatory_depends_on": "eval:doc.signoff_type==\"Onboarding\"",
    "options": "Vendor KYC",
-   "read_only_depends_on": "eval:!doc.__islocal",
-   "reqd": 1
+   "read_only": 1
   },
   {
    "fieldname": "vendor",
@@ -32,52 +61,187 @@
    "in_list_view": 1,
    "label": "Vendor",
    "options": "Supplier",
+   "read_only_depends_on": "eval:doc.signoff_type!=\"Renewal\"",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_reboarding",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Is Re-boarding",
    "read_only": 1
   },
   {
-   "default": "Manual",
-   "fieldname": "provider",
-   "fieldtype": "Select",
-   "in_list_view": 1,
-   "label": "E-Sign Provider",
-   "options": "Manual",
-   "reqd": 1
+   "default": "0",
+   "fieldname": "is_renewal",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Is Renewal",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.signoff_type==\"Reboarding\"",
+   "fieldname": "reboarding_request",
+   "fieldtype": "Link",
+   "label": "Vendor Reboarding Request",
+   "mandatory_depends_on": "eval:doc.signoff_type==\"Reboarding\"",
+   "options": "Vendor Reboarding Request",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.signoff_type==\"Onboarding\"",
+   "fieldname": "onboarding_request",
+   "fieldtype": "Link",
+   "label": "Vendor Onboarding Request",
+   "options": "Vendor Onboarding Request",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.previous_failed_sign_off",
+   "description": "The earlier Sign-off that failed, which this one is retrying.",
+   "fieldname": "previous_failed_sign_off",
+   "fieldtype": "Link",
+   "label": "Retry Of (Failed Sign-off)",
+   "options": "Vendor Sign Off",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "kyc.official_email",
+   "fieldname": "supplier_email",
+   "fieldtype": "Data",
+   "label": "Supplier Email",
+   "options": "Email",
+   "read_only": 1
+  },
+  {
+   "description": "Optional \u2014 an extra recipient for the Sign-off email, in addition to Supplier Email.",
+   "fieldname": "additional_email",
+   "fieldtype": "Data",
+   "label": "Additional Email",
+   "options": "Email"
+  },
+  {
+   "fetch_from": "kyc.contact_person_name",
+   "fieldname": "contact_person_name",
+   "fieldtype": "Data",
+   "label": "Contact Person Name",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "kyc.contact_person_number",
+   "fieldname": "contact_person_number",
+   "fieldtype": "Phone",
+   "label": "Contact Person Number",
+   "read_only": 1
   },
   {
    "fieldname": "column_break_top",
    "fieldtype": "Column Break"
   },
   {
-   "fieldname": "requested_on",
-   "fieldtype": "Datetime",
-   "label": "Requested On",
-   "read_only": 1
+   "description": "Optional \u2014 used for the Sign-off email's Company Name / GSTIN instead of the Default Company in Global Defaults.",
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company"
   },
   {
-   "fieldname": "signed_on",
-   "fieldtype": "Datetime",
-   "label": "Signed On",
-   "read_only": 1
+   "default": "0",
+   "description": "Check this if the vendor failed sign-off instead of completing it. Submitting is then allowed without a signed document, or any other mandatory stage having passed, and the Supplier is disabled instead of activated.",
+   "fieldname": "sign_off_failed",
+   "fieldtype": "Check",
+   "label": "Sign Off Failed"
   },
   {
-   "fieldname": "section_break_document",
+   "depends_on": "eval:doc.sign_off_failed",
+   "fieldname": "failure_reason",
+   "fieldtype": "Small Text",
+   "label": "Failure Reason",
+   "mandatory_depends_on": "eval:doc.sign_off_failed"
+  },
+  {
+   "fieldname": "section_break_documents",
    "fieldtype": "Section Break",
-   "label": "Signed Document"
+   "label": "Contract & Code of Conduct"
   },
   {
-   "fieldname": "signed_document",
+   "description": "Must be attached before the Sign-off email can be sent.",
+   "fieldname": "contract",
    "fieldtype": "Attach",
-   "label": "Signed Document"
+   "label": "Contract"
+  },
+  {
+   "description": "Must be attached before submitting.",
+   "fieldname": "signed_contract",
+   "fieldtype": "Attach",
+   "label": "Signed Contract"
+  },
+  {
+   "depends_on": "eval:!doc.sign_off_failed",
+   "description": "How long this contract is valid for. Whether this is mandatory before submitting is controlled by \"Require Contract Validity\" in Vendor Lifecycle Settings.",
+   "fieldname": "contract_validity",
+   "fieldtype": "Date",
+   "label": "Contract Validity"
+  },
+  {
+   "fieldname": "column_break_documents",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "code_of_conduct_acknowledged",
+   "fieldtype": "Check",
+   "label": "Code of Conduct / Anti-Bribery Acknowledged"
+  },
+  {
+   "depends_on": "eval:doc.code_of_conduct_acknowledged",
+   "description": "Must be attached before the Sign-off email can be sent.",
+   "fieldname": "code_of_conduct",
+   "fieldtype": "Attach",
+   "label": "Code of Conduct / Anti-Bribery Policy"
+  },
+  {
+   "depends_on": "eval:doc.code_of_conduct_acknowledged",
+   "description": "Must be attached before submitting.",
+   "fieldname": "code_of_conduct_document",
+   "fieldtype": "Attach",
+   "label": "Signed Code of Conduct / Anti-Bribery Declaration"
   },
   {
    "fieldname": "notes",
    "fieldtype": "Small Text",
    "label": "Notes"
+  },
+  {
+   "fieldname": "upload_token",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Upload Token",
+   "no_copy": 1,
+   "print_hide": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_reminder_sent",
+   "fieldtype": "Date",
+   "label": "Last Reminder Sent",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Vendor Sign Off",
+   "print_hide": 1,
+   "read_only": 1
   }
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2026-08-03 12:51:42.036303",
+ "modified": "2026-09-21 11:00:00.000000",
  "modified_by": "Administrator",
  "module": "Vendor Lifecycle",
  "name": "Vendor Sign Off",
